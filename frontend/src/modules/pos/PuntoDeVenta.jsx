@@ -4,6 +4,7 @@ import { getProductos } from "../productos/services/productos.api";
 import { crearVenta } from "./services/pos.api";
 import { crearCliente } from "../clientes/services/clientes.api";
 import { getDepartamentos, getMunicipios } from "../ubicacion/services/ubicacion.api";
+import { decodeToken } from "../../utils/auth";
 
 import { useCarrito } from "./hooks/useCarrito";
 import { useClientes } from "./hooks/useClientes";
@@ -35,9 +36,34 @@ export default function PuntoDeVenta() {
     agregarProducto,
     cambiarCantidad,
     eliminarProducto,
-    total,
     setCarrito
   } = useCarrito(productos);
+
+  // Descuento por nivel de lealtad del cliente (mismo criterio que calcula el servidor)
+  const [nivelLealtad, setNivelLealtad] = useState(null);
+  useEffect(() => {
+    const empresaId = decodeToken(token)?.empresa_id;
+    if (!clienteSeleccionado || !empresaId) { setNivelLealtad(null); return; }
+    let vigente = true;
+    const base = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    fetch(`${base}/api/productos/lealtad/cliente/${clienteSeleccionado.id}/empresa/${empresaId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vigente) setNivelLealtad(d?.nivel_actual || null); })
+      .catch(() => { if (vigente) setNivelLealtad(null); });
+    return () => { vigente = false; };
+  }, [clienteSeleccionado, token]);
+
+  const descuentoLealtad = nivelLealtad ? parseFloat(nivelLealtad.descuento_porcentaje) || 0 : 0;
+  const precioFinal = (p) => {
+    const precio = parseFloat(p.precio);
+    const opciones = [precio];
+    const mayoreo = parseFloat(p.precio_mayoreo);
+    if (mayoreo > 0) opciones.push(mayoreo);
+    if (descuentoLealtad > 0) opciones.push(precio * (1 - descuentoLealtad / 100));
+    return Math.round(Math.min(...opciones) * 100) / 100;
+  };
+  const carritoVista = carrito.map((p) => ({ ...p, precio: precioFinal(p) }));
+  const total = Math.round(carritoVista.reduce((acc, p) => acc + p.precio * p.cantidad, 0) * 100) / 100;
 
   const [busquedaProducto, setBusquedaProducto] = useState("");
   const { busqueda, setBusqueda, clientes, setClientes } =
@@ -162,8 +188,8 @@ export default function PuntoDeVenta() {
       // Guardar datos del ticket antes de limpiar el carrito
       setTicketVenta({
         cliente: clienteSeleccionado,
-        items: [...carrito],
-        total,
+        items: [...carritoVista],
+        total: res?.total ?? total,
         metodoPago,
         fecha: new Date(),
         id: res?.id || res?.venta_id || null,
@@ -245,7 +271,7 @@ export default function PuntoDeVenta() {
               </div>
 
               <Carrito
-                carrito={carrito}
+                carrito={carritoVista}
                 cambiarCantidad={cambiarCantidad}
                 eliminarProducto={eliminarProducto}
                 fmt={fmt}
@@ -257,6 +283,13 @@ export default function PuntoDeVenta() {
                   metodoPago={metodoPago}
                   setMetodoPago={setMetodoPago}
                 />
+
+                {nivelLealtad && descuentoLealtad > 0 && (
+                  <div className="total-row" style={{ fontSize: "13px", color: "#0f766e" }}>
+                    <span>Nivel {nivelLealtad.nombre}</span>
+                    <span>-{descuentoLealtad}%</span>
+                  </div>
+                )}
 
                 <div className="total-row">
                   <span>Total</span>

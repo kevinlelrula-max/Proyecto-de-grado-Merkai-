@@ -31,3 +31,24 @@ export const verificarToken = async (req, res, next) => {
   req.user = decoded;
   next();
 };
+
+// Autorización por sección: SuperAdmin y Administrador tienen acceso total; el resto de roles
+// necesita la sección en rol_permisos (la misma tabla que arma el menú del panel).
+const ROLES_ADMIN = [1, 2];
+
+export const requierePermiso = (seccion) => async (req, res, next) => {
+  if (ROLES_ADMIN.includes(req.user?.rol_id)) return next();
+  try {
+    const { rows } = await pool.query(
+      "SELECT 1 FROM rol_permisos WHERE rol_id = $1 AND seccion = $2 LIMIT 1",
+      [req.user?.rol_id, seccion]
+    );
+    if (rows.length === 0) {
+      return res.status(403).json({ error: "No tienes permisos para acceder a esta sección" });
+    }
+    next();
+  } catch (error) {
+    console.error("Error verificando permiso:", error);
+    res.status(500).json({ error: "Error de autorización" });
+  }
+};

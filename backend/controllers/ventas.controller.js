@@ -1,5 +1,6 @@
 import pool from "../config/db.js";
 import { crearNotificacion } from "../utils/notificaciones.js";
+import { getNivelLealtadCliente, precioInteligente, redondear } from "../utils/calcularPedido.js";
 
 // =========================
 // CREAR VENTA
@@ -19,6 +20,10 @@ export const crearVenta = async (req, res) => {
     }
 
     await client.query("BEGIN");
+
+    // Descuento por nivel de lealtad: se calcula en el servidor, igual que en la tienda en línea
+    const { nivel } = await getNivelLealtadCliente(cliente_id, empresa_id, client);
+    const descuentoLealtad = nivel ? parseFloat(nivel.descuento_porcentaje) || 0 : 0;
 
     const ventaResult = await client.query(
       `INSERT INTO ventas (empresa_id, administrador_id, cliente_id, metodo_pago_id, total)
@@ -58,13 +63,14 @@ export const crearVenta = async (req, res) => {
         throw new Error(`Stock insuficiente para ${producto.nombre}`);
       }
 
-      const subtotal = producto.precio * cantidad;
+      const precioUnitario = redondear(precioInteligente(producto, descuentoLealtad));
+      const subtotal = precioUnitario * cantidad;
       total += subtotal;
 
       await client.query(
         `INSERT INTO detalle_venta (venta_id, producto_id, cantidad, precio_unitario)
          VALUES ($1, $2, $3, $4)`,
-        [venta.id, producto_id, cantidad, producto.precio]
+        [venta.id, producto_id, cantidad, precioUnitario]
       );
 
       const stockResult = await client.query(
@@ -85,6 +91,8 @@ export const crearVenta = async (req, res) => {
       }
     }
 
+    total = redondear(total);
+
     await client.query(
       "UPDATE ventas SET total = $1 WHERE id = $2",
       [total, venta.id]
@@ -96,7 +104,9 @@ export const crearVenta = async (req, res) => {
     res.status(201).json({
       venta_id: venta.id,
       total,
-      fecha: venta.fecha
+      fecha: venta.fecha,
+      descuento_lealtad: descuentoLealtad,
+      nivel_lealtad: nivel ? nivel.nombre : null
     });
 
   } catch (error) {

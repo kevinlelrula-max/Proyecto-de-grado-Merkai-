@@ -7,7 +7,7 @@ import {
   getIntegracionesPublicas,
 } from "../controllers/integraciones.controller.js";
 
-import { verificarToken } from "../middlewares/auth.middleware.js";
+import { verificarToken, requierePermiso } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -15,9 +15,9 @@ const router = Router();
 router.get("/publicas/:empresa_id", getIntegracionesPublicas);
 
 // 🔐 PRIVADAS — solo el admin/cajero de la empresa
-router.get("/",                       verificarToken, getIntegraciones);
-router.post("/",                      verificarToken, guardarIntegracion);
-router.patch("/:proveedor/toggle",    verificarToken, toggleIntegracion);
-router.delete("/:proveedor",          verificarToken, eliminarIntegracion);
+router.get("/",                       verificarToken, requierePermiso("integraciones"), getIntegraciones);
+router.post("/",                      verificarToken, requierePermiso("integraciones"), guardarIntegracion);
+router.patch("/:proveedor/toggle",    verificarToken, requierePermiso("integraciones"), toggleIntegracion);
+router.delete("/:proveedor",          verificarToken, requierePermiso("integraciones"), eliminarIntegracion);
 
 export default router;

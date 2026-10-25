@@ -2,15 +2,17 @@ import pool from "../config/db.js";
 import Stripe from "stripe";
 import crypto from "crypto";
 import { getLlavePrivada } from "./integraciones.controller.js";
+import { enviarEmailEstadoPedido } from "../utils/email.js";
 
 // ── Función central: procesar pago aprobado (igual para todas las pasarelas) ─
 async function procesarPagoAprobado({ empresa_id, pedido_id, proveedor, referencia, monto, datos_respuesta }) {
   const client = await pool.connect();
+  let notificarCliente = false;
   try {
     await client.query("BEGIN");
 
     const { rows: [pedido] } = await client.query(
-      "SELECT total, empresa_id FROM pedidos_online WHERE id = $1 FOR UPDATE", [pedido_id]
+      "SELECT total, empresa_id, estado FROM pedidos_online WHERE id = $1 FOR UPDATE", [pedido_id]
     );
     // Un pago menor al total del pedido (o de otra tienda) no confirma el pedido
     if (!pedido || Number(pedido.empresa_id) !== Number(empresa_id) || Number(monto) + 0.5 < Number(pedido.total)) {
@@ -41,6 +43,9 @@ async function procesarPagoAprobado({ empresa_id, pedido_id, proveedor, referenc
       [pedido_id]
     );
 
+    // Solo el primer pago aprobado notifica; un reintento del webhook no repite el correo
+    notificarCliente = pedido.estado === "pendiente";
+
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -48,6 +53,28 @@ async function procesarPagoAprobado({ empresa_id, pedido_id, proveedor, referenc
     throw error;
   } finally {
     client.release();
+  }
+
+  // 📧 Email de confirmación al cliente (fuera de transacción — fire-and-forget)
+  if (notificarCliente) {
+    pool.query(
+      `SELECT p.nombre, p.usuario AS email, e.nombre AS empresa_nombre
+       FROM pedidos_online po
+       JOIN persona p ON p.id = po.cliente_id
+       JOIN empresas e ON e.id = po.empresa_id
+       WHERE po.id = $1`,
+      [pedido_id]
+    ).then(({ rows }) => {
+      if (rows.length === 0) return;
+      const { nombre, email, empresa_nombre } = rows[0];
+      return enviarEmailEstadoPedido({
+        destinatario: email,
+        nombre,
+        numeroPedido: pedido_id,
+        estado: "confirmado",
+        empresaNombre: empresa_nombre,
+      });
+    }).catch(err => console.error("Error enviando email de pago confirmado:", err));
   }
 }
 

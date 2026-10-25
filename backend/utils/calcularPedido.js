@@ -8,7 +8,7 @@ export class ErrorPedido extends Error {
   }
 }
 
-const redondear = (n) => Math.round(n * 100) / 100;
+export const redondear = (n) => Math.round(n * 100) / 100;
 
 export function calcularDescuento(cupon, subtotal, costoEnvio = 0) {
   if (cupon.tipo === "porcentaje") {
@@ -54,7 +54,7 @@ export async function getNivelLealtadCliente(clienteId, empresaId, db = pool) {
 }
 
 // El precio más bajo entre: normal, mayoreo y normal con descuento de lealtad (igual que la tienda)
-function precioInteligente(producto, descuentoLealtad) {
+export function precioInteligente(producto, descuentoLealtad) {
   const precio = parseFloat(producto.precio);
   const precios = [precio];
   const mayoreo = parseFloat(producto.precio_mayoreo);

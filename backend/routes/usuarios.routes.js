@@ -15,7 +15,7 @@ import {
   actualizarPerfil,
   cambiarContrasenaUsuario
 } from "../controllers/usuarios.controller.js";
-import { verificarToken } from "../middlewares/auth.middleware.js";
+import { verificarToken, requierePermiso } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -28,18 +28,18 @@ router.put("/perfil/contrasena",  verificarToken, cambiarContrasenaUsuario);
 // Roles
 router.get("/roles",              verificarToken, getRoles);
 router.get("/roles/todos",        verificarToken, getTodosRoles);
-router.post("/roles",             verificarToken, crearRol);
+router.post("/roles",             verificarToken, requierePermiso("usuarios"), crearRol);
 router.get("/roles/:rol_id/permisos",    verificarToken, getPermisosRol);
-router.put("/roles/:rol_id/permisos",    verificarToken, actualizarPermisosRol);
-router.delete("/roles/:rol_id",          verificarToken, eliminarRol);
+router.put("/roles/:rol_id/permisos",    verificarToken, requierePermiso("usuarios"), actualizarPermisosRol);
+router.delete("/roles/:rol_id",          verificarToken, requierePermiso("usuarios"), eliminarRol);
 
 // Usuarios — rutas generales
-router.get("/",             verificarToken, getUsuarios);
-router.post("/",            verificarToken, crearUsuario);
+router.get("/",             verificarToken, requierePermiso("usuarios"), getUsuarios);
+router.post("/",            verificarToken, requierePermiso("usuarios"), crearUsuario);
 
 // Usuarios — rutas con parámetro AL FINAL
-router.put("/:id",          verificarToken, actualizarUsuario);
-router.patch("/:id/toggle", verificarToken, toggleUsuario);
-router.delete("/:id",       verificarToken, eliminarUsuario);
+router.put("/:id",          verificarToken, requierePermiso("usuarios"), actualizarUsuario);
+router.patch("/:id/toggle", verificarToken, requierePermiso("usuarios"), toggleUsuario);
+router.delete("/:id",       verificarToken, requierePermiso("usuarios"), eliminarUsuario);
 
 export default router;
