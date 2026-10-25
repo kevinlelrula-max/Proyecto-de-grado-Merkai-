@@ -29,7 +29,7 @@ function StripeForm({ totalPrecio, onExito, onError }) {
       setProcesando(false);
       onError?.(error.message);
     } else if (paymentIntent?.status === "succeeded") {
-      onExito?.();
+      onExito?.(paymentIntent.id);
     } else {
       setErrorPago("Estado de pago inesperado. Intenta de nuevo.");
       setProcesando(false);
@@ -76,14 +76,25 @@ export default function CheckoutModal({
   totalPrecio,
   carrito,
   empresaNombre,
+  pedidoId,
   onPagoExitoso,
 }) {
   const [pagoExitoso, setPagoExitoso] = useState(false);
 
   if (!abierto) return null;
 
-  const handleExito = () => {
+  const handleExito = (paymentIntentId) => {
     setPagoExitoso(true);
+    // El servidor verifica el pago directamente con Stripe y confirma el pedido (no depende del webhook)
+    if (pedidoId) {
+      const base  = import.meta.env.VITE_API_URL || "http://localhost:3000";
+      const token = localStorage.getItem("cliente_token");
+      fetch(`${base}/api/pagos/confirmar-stripe`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ pedido_id: pedidoId, payment_intent_id: paymentIntentId }),
+      }).catch(() => {});
+    }
     setTimeout(() => {
       onPagoExitoso?.();
       onCerrar();

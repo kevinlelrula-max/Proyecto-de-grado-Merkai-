@@ -37,7 +37,25 @@ export function useMisPedidos() {
   const fetchPedidos = useCallback(async () => {
     if (!clienteToken) return;
     try {
-      const data = await getMisPedidos(clienteToken);
+      let data = await getMisPedidos(clienteToken);
+
+      // Pagos con tarjeta que siguen pendientes: se verifican directamente con Stripe
+      // (cubre pagos que redirigen o que el cliente dejó a medias, sin depender del webhook)
+      const porVerificar = data.filter(p => p.estado === "pendiente" && p.metodo_pago?.toLowerCase() === "tarjeta");
+      if (porVerificar.length > 0) {
+        const base = import.meta.env.VITE_API_URL || "http://localhost:3000";
+        const resultados = await Promise.all(porVerificar.map(p =>
+          fetch(`${base}/api/pagos/confirmar-stripe`, {
+            method:  "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${clienteToken}` },
+            body:    JSON.stringify({ pedido_id: p.id }),
+          }).then(r => (r.ok ? r.json() : null)).catch(() => null)
+        ));
+        if (resultados.some(r => r && r.estado && r.estado !== "pendiente")) {
+          data = await getMisPedidos(clienteToken);
+        }
+      }
+
       // Inicializar mapa de estados (sin notificar en la carga inicial)
       data.forEach(p => prevEstadosRef.current.set(p.id, p.estado));
       setPedidos(data);

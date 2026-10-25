@@ -7,6 +7,7 @@ import {
   webhookPayU,
   webhookMercadoPago,
   getEstadoPago,
+  confirmarPagoStripe,
 } from "../controllers/pagos.controller.js";
 
 import { verificarToken } from "../middlewares/auth.middleware.js";
@@ -29,5 +30,6 @@ router.post("/webhook/mercadopago", webhookMercadoPago);
 // 🔐 Rutas privadas — requieren token del cliente
 router.post("/crear-payment-intent", verificarToken, crearPaymentIntent);
 router.get("/estado/:pedido_id",     verificarToken, getEstadoPago);
+router.post("/confirmar-stripe",     verificarToken, confirmarPagoStripe);
 
 export default router;

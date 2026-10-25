@@ -106,6 +106,7 @@ export default function Carrito({
     loadingIntent,
     errorCheckout,
     montoPedido,
+    pedidoCreadoId,
     tienePasarela,
     abrirCheckout,
     cerrarCheckout,
@@ -409,6 +410,7 @@ export default function Carrito({
         clientSecret={clientSecret}
         loadingIntent={loadingIntent}
         errorCheckout={errorCheckout}
+        pedidoId={pedidoCreadoId}
         totalPrecio={montoPedido ?? totalConEnvio}
         carrito={carrito}
         empresaNombre={empresaNombre}

@@ -14,6 +14,7 @@ export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas,
   const [loadingIntent, setLoadingIntent]   = useState(false);
   const [errorCheckout, setErrorCheckout]   = useState("");
   const [montoPedido, setMontoPedido]       = useState(null);
+  const [pedidoCreadoId, setPedidoCreadoId]  = useState(null);
   const [pasarelasActivas, setPasarelasActivas] = useState([]);
   const [cargandoPasarelas, setCargandoPasarelas] = useState(false);
 
@@ -74,6 +75,7 @@ export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas,
 
         const pedidoId = pedidoRes.data.id;
         setMontoPedido(pedidoRes.data.total);
+        setPedidoCreadoId(pedidoId);
 
         const intentRes = await axios.post(
           `${API_URL}/api/pagos/crear-payment-intent`,
@@ -112,6 +114,7 @@ export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas,
     loadingIntent,
     errorCheckout,
     montoPedido,
+    pedidoCreadoId,
     pasarelasActivas,
     cargandoPasarelas,
     tienePasarela,

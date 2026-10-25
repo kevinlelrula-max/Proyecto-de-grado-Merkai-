@@ -335,3 +335,62 @@ export const getEstadoPago = async (req, res) => {
     res.status(500).json({ error: "Error al obtener estado del pago" });
   }
 };
+// =========================
+// 🔹 CONFIRMAR PAGO STRIPE (verificación directa)
+// No depende del webhook: el servidor le pregunta a Stripe, con las llaves de la empresa,
+// si el pago del pedido está aprobado. Sirve para cualquier empresa sin configurar nada más.
+// =========================
+export const confirmarPagoStripe = async (req, res) => {
+  try {
+    const { pedido_id, payment_intent_id } = req.body;
+    const cliente_id = req.user.id;
+    if (!pedido_id) return res.status(400).json({ error: "Falta el pedido" });
+
+    const { rows: [pedido] } = await pool.query(
+      "SELECT id, empresa_id, estado FROM pedidos_online WHERE id = $1 AND cliente_id = $2",
+      [pedido_id, cliente_id]
+    );
+    if (!pedido) return res.status(404).json({ error: "Pedido no encontrado" });
+    if (pedido.estado !== "pendiente") return res.json({ estado: pedido.estado });
+
+    const llavePrivada = await getLlavePrivada(pedido.empresa_id, "stripe");
+    if (!llavePrivada) return res.json({ estado: pedido.estado });
+    const stripe = new Stripe(llavePrivada);
+
+    // El pago se busca en Stripe; el navegador solo aporta el id, nunca el resultado
+    let pi = null;
+    if (payment_intent_id) {
+      pi = await stripe.paymentIntents.retrieve(payment_intent_id);
+    } else {
+      const encontrados = await stripe.paymentIntents.search({
+        query: `metadata['pedido_id']:'${pedido.id}'`,
+        limit: 10,
+      });
+      pi = encontrados.data.find((x) => x.status === "succeeded") || encontrados.data[0] || null;
+    }
+
+    const coincide = pi
+      && String(pi.metadata?.pedido_id) === String(pedido.id)
+      && Number(pi.metadata?.empresa_id) === Number(pedido.empresa_id);
+    if (!coincide || pi.status !== "succeeded") {
+      return res.json({ estado: pedido.estado, pago: pi ? pi.status : "sin_pago" });
+    }
+
+    await procesarPagoAprobado({
+      empresa_id:      pedido.empresa_id,
+      pedido_id:       pedido.id,
+      proveedor:       "stripe",
+      referencia:      pi.id,
+      monto:           pi.amount / 100,
+      datos_respuesta: pi,
+    });
+
+    const { rows: [actualizado] } = await pool.query(
+      "SELECT estado FROM pedidos_online WHERE id = $1", [pedido.id]
+    );
+    res.json({ estado: actualizado.estado });
+  } catch (error) {
+    console.error("Error confirmarPagoStripe:", error);
+    res.status(500).json({ error: "No se pudo verificar el pago" });
+  }
+};
