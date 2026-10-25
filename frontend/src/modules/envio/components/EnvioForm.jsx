@@ -42,8 +42,8 @@ const DEPARTAMENTOS = [
  * Se renderiza dentro del Carrito.
  *
  * Props:
- *   onCostoChange(costo: number) — callback que recibe el costo calculado
- *                                   para sumarlo al total del carrito.
+ *   onCostoChange(costo: number, departamentoId: number|null) — costo calculado y
+ *                                   departamento elegido (el servidor recalcula el envío con él).
  */
 export default function EnvioForm({ empresa_id, onCostoChange }) {
   const {
@@ -52,13 +52,14 @@ export default function EnvioForm({ empresa_id, onCostoChange }) {
     seleccionarDepartamento,
     costoAplicado,
     esGratis,
+    requiereDepartamento,
     loading,
     error,
   } = useEnvioCliente(empresa_id);
 
   useEffect(() => {
-    if (onCostoChange) onCostoChange(costoAplicado);
-  }, [costoAplicado, onCostoChange]);
+    if (onCostoChange) onCostoChange(costoAplicado, depSeleccionado, requiereDepartamento);
+  }, [costoAplicado, depSeleccionado, requiereDepartamento, onCostoChange]);
 
   if (loading) {
     return (
@@ -88,7 +89,7 @@ export default function EnvioForm({ empresa_id, onCostoChange }) {
         id="envio-dep"
         style={s.select}
         value={depSeleccionado ?? ""}
-        onChange={e => seleccionarDepartamento(Number(e.target.value))}
+        onChange={e => seleccionarDepartamento(e.target.value ? Number(e.target.value) : null)}
       >
         <option value="">— Selecciona tu departamento —</option>
         {DEPARTAMENTOS.map(dep => {

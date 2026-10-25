@@ -4,9 +4,64 @@ import { imgUrl } from "../../../utils/imgUrl";
 
 const IMG_PLACEHOLDER = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22200%22%20viewBox%3D%220%200%20300%20200%22%3E%3Crect%20width%3D%22300%22%20height%3D%22200%22%20fill%3D%22%23f1f5f9%22%2F%3E%3Crect%20x%3D%22120%22%20y%3D%2272%22%20width%3D%2260%22%20height%3D%2245%22%20rx%3D%225%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%222.5%22%2F%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%2294%22%20r%3D%2211%22%20fill%3D%22none%22%20stroke%3D%22%23cbd5e1%22%20stroke-width%3D%222.5%22%2F%3E%3Ccircle%20cx%3D%22150%22%20cy%3D%2294%22%20r%3D%224%22%20fill%3D%22%23cbd5e1%22%2F%3E%3C%2Fsvg%3E";
 
-export default function TablaProductos({ productos, onEliminar, onEditar, onAgregar, vista = "grid" }) {
+export default function TablaProductos({ productos, onEliminar, onToggleEstado, onEditar, onAgregar, vista = "grid" }) {
   const [copiadoId, setCopiadoId] = useState(null);
-  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+  // { id, paso: "eliminar" | "historial" }
+  const [pendiente, setPendiente] = useState(null);
+  const cerrar = () => setPendiente(null);
+
+  const confirmarEliminar = async (id) => {
+    const resultado = await onEliminar(id);
+    setPendiente(resultado === "historial" ? { id, paso: "historial" } : null);
+  };
+
+  const renderAcciones = (p) => {
+    const paso = pendiente?.id === p.id ? pendiente.paso : null;
+    const activo = p.activo !== false;
+
+    if (paso === "eliminar") return (
+      <div style={styles.cardActions}>
+        <span style={styles.confirmText}>¿Eliminar?</span>
+        <button style={styles.btnConfirmYes} onClick={() => confirmarEliminar(p.id)}>Sí</button>
+        <button style={styles.btnConfirmNo} onClick={cerrar}>No</button>
+      </div>
+    );
+
+    if (paso === "historial") return (
+      <div style={styles.historialBox}>
+        <span style={styles.historialText}>Tiene ventas registradas, no se puede eliminar.</span>
+        <div style={styles.cardActions}>
+          {activo && (
+            <button style={styles.warnBtn} onClick={() => { onToggleEstado(p.id); cerrar(); }}>Desactivar</button>
+          )}
+          <button style={styles.btnConfirmNo} onClick={cerrar}>{activo ? "Cancelar" : "Cerrar"}</button>
+        </div>
+      </div>
+    );
+
+    return (
+      <div style={styles.cardActions}>
+        <button style={styles.editBtn} onClick={() => onEditar(p)}>Editar</button>
+        <button style={styles.deleteBtn} onClick={() => setPendiente({ id: p.id, paso: "eliminar" })}>Eliminar</button>
+        <button
+          style={activo ? styles.pauseBtn : styles.playBtn}
+          onClick={() => onToggleEstado(p.id)}
+          title={activo ? "Desactivar: ocultar de la tienda y del POS" : "Activar: volver a mostrar en la tienda y el POS"}
+        >
+          {activo ? "⏸" : "▶"}
+        </button>
+        {activo && (
+          <button
+            style={copiadoId === p.id ? styles.copiadoBtn : styles.copiarBtn}
+            onClick={() => copiarLink(p.id)}
+            title="Copiar link de producto para compartir"
+          >
+            {copiadoId === p.id ? "✓" : "🔗"}
+          </button>
+        )}
+      </div>
+    );
+  };
 
   const copiarLink = (productoId) => {
     const slug = localStorage.getItem("empresa_slug") || "";
@@ -35,39 +90,22 @@ export default function TablaProductos({ productos, onEliminar, onEditar, onAgre
         {productos.map((p) => {
           const stockColor = getStockColor(p.stock);
           return (
-            <div key={p.id} style={styles.listRow}>
+            <div key={p.id} style={{ ...styles.listRow, ...(p.activo === false ? styles.inactivo : {}) }}>
               <img
                 src={imgUrl(p.imagen_url) || IMG_PLACEHOLDER}
                 alt={p.nombre}
                 style={styles.listThumb}
                 onError={(e) => { e.target.src = IMG_PLACEHOLDER; }}
               />
-              <span style={styles.listName}>{p.nombre}</span>
+              <span style={styles.listName}>
+                {p.nombre}
+                {p.activo === false && <span style={styles.inactivoBadge}>Desactivado</span>}
+              </span>
               <span style={styles.listPrice}>{formatearPrecio(p.precio)}</span>
               <span style={{ ...styles.badge, ...stockColor }}>
                 Stock: {p.stock}
               </span>
-              <div style={styles.cardActions}>
-                {pendingDeleteId === p.id ? (
-                  <>
-                    <span style={styles.confirmText}>¿Eliminar?</span>
-                    <button style={styles.btnConfirmYes} onClick={() => { onEliminar(p.id); setPendingDeleteId(null); }}>Sí</button>
-                    <button style={styles.btnConfirmNo} onClick={() => setPendingDeleteId(null)}>No</button>
-                  </>
-                ) : (
-                  <>
-                    <button style={styles.editBtn} onClick={() => onEditar(p)}>Editar</button>
-                    <button style={styles.deleteBtn} onClick={() => setPendingDeleteId(p.id)}>Eliminar</button>
-                    <button
-                      style={copiadoId === p.id ? styles.copiadoBtn : styles.copiarBtn}
-                      onClick={() => copiarLink(p.id)}
-                      title="Copiar link de producto para compartir"
-                    >
-                      {copiadoId === p.id ? "✓" : "🔗"}
-                    </button>
-                  </>
-                )}
-              </div>
+              {renderAcciones(p)}
             </div>
           );
         })}
@@ -80,7 +118,7 @@ export default function TablaProductos({ productos, onEliminar, onEditar, onAgre
       {productos.map((p) => {
         const stockColor = getStockColor(p.stock);
         return (
-          <div key={p.id} style={styles.card}>
+          <div key={p.id} style={{ ...styles.card, ...(p.activo === false ? styles.inactivo : {}) }}>
             <div style={styles.imgWrap}>
               <img
                 src={imgUrl(p.imagen_url) || IMG_PLACEHOLDER}
@@ -94,28 +132,9 @@ export default function TablaProductos({ productos, onEliminar, onEditar, onAgre
             </div>
             <div style={styles.cardBody}>
               <p style={styles.cardName}>{p.nombre}</p>
+              {p.activo === false && <span style={{ ...styles.inactivoBadge, marginLeft: 0 }}>Desactivado</span>}
               <p style={styles.cardPrice}>{formatearPrecio(p.precio)}</p>
-              <div style={styles.cardActions}>
-                {pendingDeleteId === p.id ? (
-                  <>
-                    <span style={styles.confirmText}>¿Eliminar?</span>
-                    <button style={styles.btnConfirmYes} onClick={() => { onEliminar(p.id); setPendingDeleteId(null); }}>Sí</button>
-                    <button style={styles.btnConfirmNo} onClick={() => setPendingDeleteId(null)}>No</button>
-                  </>
-                ) : (
-                  <>
-                    <button style={styles.editBtn} onClick={() => onEditar(p)}>Editar</button>
-                    <button style={styles.deleteBtn} onClick={() => setPendingDeleteId(p.id)}>Eliminar</button>
-                    <button
-                      style={copiadoId === p.id ? styles.copiadoBtn : styles.copiarBtn}
-                      onClick={() => copiarLink(p.id)}
-                      title="Copiar link de producto para compartir"
-                    >
-                      {copiadoId === p.id ? "✓" : "🔗"}
-                    </button>
-                  </>
-                )}
-              </div>
+              {renderAcciones(p)}
             </div>
           </div>
         );
@@ -286,6 +305,31 @@ const styles = {
     fontWeight: "700",
     flexShrink: 0,
   },
+
+  // Estado activo / inactivo
+  inactivo: { opacity: 0.6, backgroundColor: "#f8fafc" },
+  inactivoBadge: {
+    display: "inline-block", marginLeft: "8px", marginBottom: "4px",
+    padding: "1px 8px", fontSize: "11px", fontWeight: "600",
+    borderRadius: "999px", backgroundColor: "#e2e8f0", color: "#475569",
+  },
+  pauseBtn: {
+    padding: "6px 10px", border: "1.5px solid #f59e0b", borderRadius: "8px",
+    cursor: "pointer", backgroundColor: "transparent", color: "#b45309",
+    fontSize: "12px", fontWeight: "600", flexShrink: 0,
+  },
+  playBtn: {
+    padding: "6px 10px", border: "1.5px solid #10b981", borderRadius: "8px",
+    cursor: "pointer", backgroundColor: "#f0fdf4", color: "#047857",
+    fontSize: "12px", fontWeight: "600", flexShrink: 0,
+  },
+  warnBtn: {
+    padding: "5px 10px", border: "1.5px solid #f59e0b", borderRadius: "7px",
+    cursor: "pointer", backgroundColor: "transparent", color: "#b45309",
+    fontSize: "12px", fontWeight: "600",
+  },
+  historialBox: { display: "flex", flexDirection: "column", gap: "6px" },
+  historialText: { fontSize: "12px", color: "#475569", lineHeight: 1.4 },
 
   // Confirm delete
   confirmText: { fontSize: "12px", color: "#dc2626", fontWeight: "600", whiteSpace: "nowrap" },

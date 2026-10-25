@@ -30,7 +30,7 @@ export function registerInventarioTools(server, pool, empresa_id) {
            ) t
            GROUP BY producto_id
          ) v30 ON v30.producto_id = p.id
-         WHERE p.empresa_id = $1 AND p.stock_minimo IS NOT NULL AND p.stock <= p.stock_minimo
+         WHERE p.empresa_id = $1 AND p.activo AND p.stock_minimo IS NOT NULL AND p.stock <= p.stock_minimo
          ORDER BY p.stock ASC`,
         [empresa_id]
       );

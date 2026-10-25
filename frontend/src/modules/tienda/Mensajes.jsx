@@ -1,23 +1,81 @@
-import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, Mail, Phone, MessageCircle, MessageSquare } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { RefreshCw, Mail, Phone, MessageCircle, MessageSquare, Search, ArrowLeft, Inbox, AlertTriangle, CheckCheck } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-function getToken() {
-  return localStorage.getItem("token");
+const getToken = () => localStorage.getItem("token");
+
+const AVATAR_COLORS = ["#2563eb", "#0891b2", "#7c3aed", "#db2777", "#ea580c", "#059669"];
+const avatarBg = (nombre = "") => AVATAR_COLORS[(nombre.charCodeAt(0) || 0) % AVATAR_COLORS.length];
+const inicial = (nombre = "") => (nombre.trim().charAt(0) || "?").toUpperCase();
+
+const inicioDia = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+// "Hoy, 3:45 p. m.", "Ayer", "hace 3 días", "12 de mar."
+function fechaAmable(valor, completa = false) {
+  const f = new Date(valor);
+  if (isNaN(f)) return "";
+  const hora = f.toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" });
+  const dias = Math.round((inicioDia(new Date()) - inicioDia(f)) / 86400000);
+  if (dias <= 0) return completa ? `Hoy, ${hora}` : hora;
+  if (dias === 1) return completa ? `Ayer, ${hora}` : "Ayer";
+  if (dias < 7 && !completa) return `Hace ${dias} días`;
+  const dia = f.toLocaleDateString("es-CO", { day: "numeric", month: completa ? "long" : "short", year: f.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined });
+  return completa ? `${dia}, ${hora}` : dia;
 }
 
-const AVATAR_COLORS = ["#2563eb","#0891b2","#7c3aed","#db2777","#ea580c","#059669"];
-const avatarBg = (nombre = "") => AVATAR_COLORS[nombre.charCodeAt(0) % AVATAR_COLORS.length];
+function Avatar({ nombre, size = 40 }) {
+  return (
+    <span
+      className="rounded-full flex items-center justify-center text-white font-bold flex-shrink-0"
+      style={{ width: size, height: size, background: avatarBg(nombre), fontSize: size * 0.4 }}
+      aria-hidden="true"
+    >
+      {inicial(nombre)}
+    </span>
+  );
+}
+
+function Esqueleto() {
+  return (
+    <ul className="divide-y divide-slate-100" aria-label="Cargando mensajes">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <li key={i} className="flex gap-3 p-4 animate-pulse">
+          <span className="w-10 h-10 rounded-full bg-slate-200 flex-shrink-0" />
+          <div className="flex-1 space-y-2 pt-1">
+            <div className="h-3 w-1/3 rounded bg-slate-200" />
+            <div className="h-3 w-4/5 rounded bg-slate-100" />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Vacio({ Icon, titulo, texto, accion }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center px-6 py-14">
+      <span className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+        <Icon size={26} />
+      </span>
+      <p className="text-[15px] font-semibold text-slate-900">{titulo}</p>
+      <p className="text-sm text-slate-600 mt-1 max-w-xs">{texto}</p>
+      {accion}
+    </div>
+  );
+}
 
 export default function Mensajes() {
-  const [mensajes, setMensajes]         = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [seleccionado, setSeleccionado] = useState(null);
-  const [filtro, setFiltro]             = useState("todos");
+  const [mensajes, setMensajes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [seleccionadoId, setSeleccionadoId] = useState(null);
+  const [filtro, setFiltro] = useState("todos");
+  const [busqueda, setBusqueda] = useState("");
 
   const fetchMensajes = useCallback(async () => {
     setLoading(true);
+    setError(false);
     try {
       const res = await fetch(`${API_BASE}/api/contacto`, {
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -25,7 +83,7 @@ export default function Mensajes() {
       if (!res.ok) throw new Error();
       setMensajes(await res.json());
     } catch {
-      setMensajes([]);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -34,313 +92,224 @@ export default function Mensajes() {
   useEffect(() => { fetchMensajes(); }, [fetchMensajes]);
 
   const marcarLeido = async (id) => {
+    setMensajes((prev) => prev.map((m) => (m.id === id ? { ...m, leido: true } : m)));
     try {
-      await fetch(`${API_BASE}/api/contacto/${id}/leido`, {
+      const res = await fetch(`${API_BASE}/api/contacto/${id}/leido`, {
         method: "PUT",
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      setMensajes(prev => prev.map(m => m.id === id ? { ...m, leido: true } : m));
-    } catch {}
+      if (!res.ok) throw new Error();
+    } catch {
+      // Si el servidor no lo guardó, vuelve a quedar sin leer para no engañar al usuario
+      setMensajes((prev) => prev.map((m) => (m.id === id ? { ...m, leido: false } : m)));
+    }
   };
 
-  const handleSeleccionar = (mensaje) => {
-    setSeleccionado(mensaje);
-    if (!mensaje.leido) marcarLeido(mensaje.id);
+  const abrir = (m) => {
+    setSeleccionadoId(m.id);
+    if (!m.leido) marcarLeido(m.id);
   };
 
-  const mensajesFiltrados = filtro === "no_leidos"
-    ? mensajes.filter(m => !m.leido)
-    : mensajes;
+  const noLeidos = mensajes.filter((m) => !m.leido).length;
 
-  const noLeidos = mensajes.filter(m => !m.leido).length;
+  const visibles = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return mensajes.filter((m) => {
+      if (filtro === "no_leidos" && m.leido) return false;
+      if (!q) return true;
+      return [m.nombre, m.email, m.telefono, m.mensaje].some((v) => (v || "").toLowerCase().includes(q));
+    });
+  }, [mensajes, filtro, busqueda]);
+
+  const sel = mensajes.find((m) => m.id === seleccionadoId) || null;
+  const tel = sel?.telefono ? sel.telefono.replace(/\D/g, "") : "";
+
+  const asuntoRespuesta = sel ? `Re: Tu mensaje a nuestra tienda` : "";
+  const cuerpoRespuesta = sel ? `Hola ${sel.nombre},\n\nGracias por escribirnos. ` : "";
+  const textoWhatsApp = sel ? `Hola ${sel.nombre}, gracias por escribirnos. Te respondo sobre tu mensaje: ` : "";
 
   return (
-    <div style={s.page}>
+    <div className="max-w-6xl mx-auto">
 
-      {/* Header */}
-      <div style={s.header}>
+      {/* Encabezado */}
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
         <div>
-          <h2 style={s.title}>Mensajes</h2>
-          <p style={s.subtitle}>Mensajes recibidos desde tu tienda online</p>
+          <h2 className="text-xl font-bold text-slate-900">Mensajes</h2>
+          <p className="text-sm text-slate-600 mt-0.5">
+            {noLeidos > 0
+              ? `Tienes ${noLeidos} ${noLeidos === 1 ? "mensaje nuevo" : "mensajes nuevos"} de tus clientes`
+              : "Lo que tus clientes te escriben desde la tienda en línea"}
+          </p>
         </div>
-        <button style={s.btnRefresh} onClick={fetchMensajes}>
-          <RefreshCw size={13} style={{ marginRight: 6, verticalAlign: "middle" }} />
-          Actualizar
+        <button
+          onClick={fetchMensajes}
+          disabled={loading}
+          className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-xl bg-white border border-slate-300 text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60 outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+        >
+          <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Actualizar
         </button>
       </div>
 
-      {/* Filtros */}
-      <div style={s.filtros}>
-        {[
-          { key: "todos",     label: `Todos (${mensajes.length})` },
-          { key: "no_leidos", label: "Sin leer", count: noLeidos },
-        ].map(f => (
-          <button
-            key={f.key}
-            style={{
-              ...s.filtroBtn,
-              backgroundColor: filtro === f.key ? "#2563eb" : "white",
-              color: filtro === f.key ? "white" : "#64748b",
-              borderColor: filtro === f.key ? "#2563eb" : "#e2e8f0",
-            }}
-            onClick={() => setFiltro(f.key)}
-          >
-            {f.label}
-            {f.count > 0 && (
-              <span style={{
-                ...s.badge,
-                background: filtro === f.key ? "rgba(255,255,255,0.25)" : "#ef4444",
-              }}>
-                {f.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
 
-      {loading ? (
-        <div style={s.loading}>
-          <p style={s.loadingText}>Cargando mensajes...</p>
-        </div>
-      ) : mensajesFiltrados.length === 0 ? (
-        <div style={s.empty}>
-          <MessageSquare size={40} color="#e2e8f0" />
-          <p style={s.emptyTitle}>
-            {filtro === "no_leidos" ? "No tienes mensajes sin leer" : "Aún no tienes mensajes"}
-          </p>
-          <p style={s.emptyDesc}>Los mensajes de tu tienda aparecerán aquí</p>
-        </div>
-      ) : (
-        <div style={s.grid}>
-
-          {/* Lista */}
-          <div style={s.lista}>
-            {mensajesFiltrados.map((m) => {
-              const activo = seleccionado?.id === m.id;
-              return (
-                <div
-                  key={m.id}
-                  style={{
-                    ...s.item,
-                    backgroundColor: activo ? "#eff6ff" : "white",
-                    borderColor: activo ? "#2563eb" : "#e2e8f0",
-                    borderLeft: !m.leido ? "3px solid #2563eb" : "3px solid transparent",
-                  }}
-                  onClick={() => handleSeleccionar(m)}
-                >
-                  <div style={s.itemTop}>
-                    <div style={{ ...s.itemAvatar, background: avatarBg(m.nombre) }}>
-                      {m.nombre?.charAt(0).toUpperCase()}
-                    </div>
-                    <div style={s.itemInfo}>
-                      <p style={{ ...s.itemNombre, fontWeight: m.leido ? "500" : "700" }}>
-                        {m.nombre}
-                      </p>
-                      <p style={s.itemPreview}>
-                        {m.mensaje.length > 60 ? `${m.mensaje.slice(0, 60)}...` : m.mensaje}
-                      </p>
-                    </div>
-                    <div style={s.itemRight}>
-                      <p style={s.itemFecha}>
-                        {new Date(m.fecha).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}
-                      </p>
-                      {!m.leido && <div style={s.dotNoLeido} />}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+        {/* Lista */}
+        <section className={`lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden ${sel ? "hidden lg:block" : ""}`} aria-label="Bandeja de mensajes">
+          <div className="p-3 border-b border-slate-100 space-y-3">
+            <label className="relative block">
+              <span className="sr-only">Buscar mensajes</span>
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="search"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre, correo o texto"
+                className="w-full pl-9 pr-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 rounded-xl border border-slate-300 bg-white outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              />
+            </label>
+            <div className="flex gap-2" role="tablist" aria-label="Filtrar mensajes">
+              {[
+                { key: "todos", label: "Todos", n: mensajes.length },
+                { key: "no_leidos", label: "Sin leer", n: noLeidos },
+              ].map((f) => {
+                const activo = filtro === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    role="tab"
+                    aria-selected={activo}
+                    onClick={() => setFiltro(f.key)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold rounded-full border transition outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${
+                      activo ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    {f.label}
+                    <span className={`text-[11px] px-1.5 rounded-full ${activo ? "bg-white/25" : "bg-slate-100 text-slate-700"}`}>{f.n}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Detalle */}
-          <div style={s.detalle}>
-            {seleccionado ? (
-              <div style={s.detalleCard}>
-                <div style={s.detalleHeader}>
-                  <div style={{ ...s.detalleAvatar, background: avatarBg(seleccionado.nombre) }}>
-                    {seleccionado.nombre?.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p style={s.detalleNombre}>{seleccionado.nombre}</p>
-                    <p style={s.detalleFecha}>
-                      {new Date(seleccionado.fecha).toLocaleDateString("es-CO", {
-                        weekday: "long", year: "numeric",
-                        month: "long", day: "numeric",
-                        hour: "2-digit", minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
-                </div>
-
-                <div style={s.detalleContacto}>
-                  {seleccionado.email && (
-                    <a href={`mailto:${seleccionado.email}`} style={s.detalleContactoItem}>
-                      <Mail size={13} style={{ marginRight: 7, color: "#94a3b8", flexShrink: 0 }} />
-                      {seleccionado.email}
-                    </a>
-                  )}
-                  {seleccionado.telefono && (
-                    <a href={`tel:${seleccionado.telefono}`} style={s.detalleContactoItem}>
-                      <Phone size={13} style={{ marginRight: 7, color: "#94a3b8", flexShrink: 0 }} />
-                      {seleccionado.telefono}
-                    </a>
-                  )}
-                  {seleccionado.telefono && (
-                    <a
-                      href={`https://wa.me/${seleccionado.telefono.replace(/\D/g, "")}`}
-                      target="_blank" rel="noreferrer"
-                      style={{ ...s.detalleContactoItem, color: "#25D366" }}
+          {loading && mensajes.length === 0 ? (
+            <Esqueleto />
+          ) : error ? (
+            <Vacio
+              Icon={AlertTriangle}
+              titulo="No pudimos cargar tus mensajes"
+              texto="Revisa tu conexión e inténtalo de nuevo. Tus mensajes no se perdieron."
+              accion={
+                <button onClick={fetchMensajes} className="mt-4 px-4 py-2 text-sm font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700">
+                  Reintentar
+                </button>
+              }
+            />
+          ) : mensajes.length === 0 ? (
+            <Vacio Icon={Inbox} titulo="Aún no tienes mensajes" texto="Cuando un cliente te escriba desde el formulario de contacto de tu tienda, lo verás aquí." />
+          ) : visibles.length === 0 ? (
+            <Vacio
+              Icon={filtro === "no_leidos" && !busqueda ? CheckCheck : Search}
+              titulo={filtro === "no_leidos" && !busqueda ? "¡Estás al día!" : "Sin resultados"}
+              texto={filtro === "no_leidos" && !busqueda ? "No tienes mensajes sin leer." : "Prueba con otra palabra o cambia el filtro."}
+            />
+          ) : (
+            <ul className="divide-y divide-slate-100 max-h-[70vh] overflow-y-auto">
+              {visibles.map((m) => {
+                const activo = m.id === seleccionadoId;
+                return (
+                  <li key={m.id}>
+                    <button
+                      onClick={() => abrir(m)}
+                      aria-current={activo}
+                      className={`w-full text-left flex gap-3 p-4 transition outline-none focus-visible:bg-blue-50 ${activo ? "bg-blue-50" : "hover:bg-slate-50"}`}
                     >
-                      <MessageCircle size={13} style={{ marginRight: 7, flexShrink: 0 }} />
-                      Responder por WhatsApp
-                    </a>
-                  )}
+                      <Avatar nombre={m.nombre} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`truncate text-sm ${m.leido ? "font-medium text-slate-800" : "font-bold text-slate-900"}`}>{m.nombre}</span>
+                          <span className="text-xs text-slate-600 flex-shrink-0">{fechaAmable(m.fecha)}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className={`truncate text-[13px] flex-1 ${m.leido ? "text-slate-600" : "text-slate-800 font-medium"}`}>{m.mensaje}</p>
+                          {!m.leido && <span className="w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0" aria-label="Sin leer" />}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* Detalle */}
+        <section className={`lg:col-span-3 rounded-2xl border border-slate-200 bg-white shadow-sm ${sel ? "" : "hidden lg:block"}`} aria-label="Detalle del mensaje">
+          {!sel ? (
+            <Vacio Icon={MessageSquare} titulo="Elige un mensaje para leerlo" texto="Aquí verás el mensaje completo y podrás responderle a tu cliente por correo o WhatsApp." />
+          ) : (
+            <div>
+              <div className="p-5 border-b border-slate-100">
+                <button onClick={() => setSeleccionadoId(null)} className="lg:hidden inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 mb-4">
+                  <ArrowLeft size={16} /> Volver a los mensajes
+                </button>
+                <div className="flex items-center gap-3">
+                  <Avatar nombre={sel.nombre} size={48} />
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-slate-900 truncate">{sel.nombre}</h3>
+                    <p className="text-[13px] text-slate-600">{fechaAmable(sel.fecha, true)}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-5">
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                  <p className="text-[15px] leading-relaxed text-slate-800 whitespace-pre-wrap break-words">{sel.mensaje}</p>
                 </div>
 
-                <div style={s.detalleMensaje}>
-                  <p style={s.detalleMensajeLabel}>Mensaje</p>
-                  <p style={s.detalleMensajeTexto}>{seleccionado.mensaje}</p>
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2">Datos de contacto</p>
+                  <ul className="space-y-2 text-sm text-slate-800">
+                    <li className="flex items-center gap-2.5">
+                      <Mail size={15} className="text-slate-500 flex-shrink-0" />
+                      {sel.email ? <span className="break-all">{sel.email}</span> : <span className="text-slate-600">No dejó correo</span>}
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <Phone size={15} className="text-slate-500 flex-shrink-0" />
+                      {sel.telefono ? <span>{sel.telefono}</span> : <span className="text-slate-600">No dejó teléfono</span>}
+                    </li>
+                  </ul>
                 </div>
 
-                {seleccionado.email && (
-                  <a
-                    href={`mailto:${seleccionado.email}?subject=Re: Tu mensaje a nuestra tienda`}
-                    style={s.btnResponder}
-                  >
-                    <Mail size={14} />
-                    Responder por email
-                  </a>
+                {!sel.email && !tel ? (
+                  <p className="text-sm text-slate-700 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    Este cliente no dejó ni correo ni teléfono, así que no hay forma de responderle desde aquí.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2.5">
+                    {sel.email && (
+                      <a
+                        href={`mailto:${sel.email}?subject=${encodeURIComponent(asuntoRespuesta)}&body=${encodeURIComponent(cuerpoRespuesta)}`}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 outline-none focus-visible:ring-4 focus-visible:ring-blue-200"
+                      >
+                        <Mail size={16} /> Responder por correo
+                      </a>
+                    )}
+                    {tel && (
+                      <a
+                        href={`https://wa.me/${tel}?text=${encodeURIComponent(textoWhatsApp)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-white border border-slate-300 text-slate-800 shadow-sm hover:bg-slate-50 outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+                      >
+                        <MessageCircle size={16} className="text-green-600" /> Responder por WhatsApp
+                      </a>
+                    )}
+                  </div>
                 )}
               </div>
-            ) : (
-              <div style={s.detalleVacio}>
-                <MessageSquare size={36} color="#e2e8f0" />
-                <p style={s.detalleVacioText}>Selecciona un mensaje para verlo</p>
-              </div>
-            )}
-          </div>
-
-        </div>
-      )}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
-
-const s = {
-  page: {
-    padding: "28px",
-    fontFamily: "'Inter', 'Segoe UI', sans-serif",
-    display: "flex", flexDirection: "column", gap: "20px",
-  },
-  header: {
-    display: "flex", alignItems: "center",
-    justifyContent: "space-between", gap: "16px",
-  },
-  title:    { fontSize: "20px", fontWeight: "700", color: "#0f172a", margin: "0 0 3px" },
-  subtitle: { fontSize: "13px", color: "#94a3b8", margin: 0 },
-  btnRefresh: {
-    display: "inline-flex", alignItems: "center",
-    padding: "8px 14px", backgroundColor: "white",
-    border: "1px solid #e2e8f0", borderRadius: "9px",
-    fontSize: "13px", fontWeight: "600", cursor: "pointer",
-    color: "#64748b",
-  },
-  filtros: { display: "flex", gap: "8px" },
-  filtroBtn: {
-    padding: "7px 16px", border: "1.5px solid",
-    borderRadius: "999px", fontSize: "13px", fontWeight: "600",
-    cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
-    transition: "all 0.15s",
-  },
-  badge: {
-    color: "white", borderRadius: "999px",
-    fontSize: "11px", fontWeight: "700", padding: "1px 6px",
-  },
-  loading:     { display: "flex", justifyContent: "center", padding: "40px" },
-  loadingText: { fontSize: "14px", color: "#94a3b8" },
-  empty: {
-    display: "flex", flexDirection: "column",
-    alignItems: "center", gap: "10px",
-    padding: "60px", textAlign: "center",
-  },
-  emptyTitle: { fontSize: "15px", fontWeight: "600", color: "#64748b", margin: 0 },
-  emptyDesc:  { fontSize: "13px", color: "#94a3b8", margin: 0 },
-  grid: {
-    display: "grid", gridTemplateColumns: "1fr 1.4fr",
-    gap: "20px", alignItems: "start",
-  },
-  lista: {
-    display: "flex", flexDirection: "column", gap: "6px",
-    maxHeight: "600px", overflowY: "auto",
-  },
-  item: {
-    borderRadius: "12px", border: "1px solid",
-    padding: "13px 15px", cursor: "pointer",
-    transition: "all 0.15s",
-  },
-  itemTop:    { display: "flex", alignItems: "flex-start", gap: "12px" },
-  itemAvatar: {
-    width: "36px", height: "36px", borderRadius: "10px",
-    color: "white", fontSize: "14px", fontWeight: "700",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    flexShrink: 0,
-  },
-  itemInfo:    { flex: 1, minWidth: 0 },
-  itemNombre:  { fontSize: "13px", color: "#0f172a", marginBottom: "3px" },
-  itemPreview: { fontSize: "12px", color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  itemRight:   { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px", flexShrink: 0 },
-  itemFecha:   { fontSize: "11px", color: "#94a3b8" },
-  dotNoLeido:  { width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#2563eb" },
-  detalle: {},
-  detalleCard: {
-    backgroundColor: "white", borderRadius: "16px",
-    border: "1px solid #e2e8f0", padding: "24px",
-    display: "flex", flexDirection: "column", gap: "18px",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-  },
-  detalleHeader: { display: "flex", alignItems: "center", gap: "14px" },
-  detalleAvatar: {
-    width: "48px", height: "48px", borderRadius: "12px",
-    color: "white", fontSize: "19px", fontWeight: "700",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    flexShrink: 0,
-  },
-  detalleNombre: { fontSize: "17px", fontWeight: "700", color: "#0f172a", marginBottom: "3px" },
-  detalleFecha:  { fontSize: "12px", color: "#94a3b8" },
-  detalleContacto: {
-    display: "flex", flexDirection: "column", gap: "8px",
-    padding: "13px 15px",
-    backgroundColor: "#f8fafc",
-    borderRadius: "10px", border: "1px solid #e2e8f0",
-  },
-  detalleContactoItem: {
-    display: "flex", alignItems: "center",
-    fontSize: "13px", color: "#0f172a",
-    textDecoration: "none", fontWeight: "500",
-  },
-  detalleMensaje: {
-    padding: "16px",
-    backgroundColor: "#f8fafc",
-    borderRadius: "10px", border: "1px solid #e2e8f0",
-  },
-  detalleMensajeLabel: {
-    fontSize: "11px", fontWeight: "600", color: "#94a3b8",
-    textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "10px",
-  },
-  detalleMensajeTexto: { fontSize: "14px", color: "#0f172a", lineHeight: "1.7", margin: 0 },
-  btnResponder: {
-    display: "inline-flex", alignItems: "center", gap: "7px",
-    padding: "10px 20px",
-    backgroundColor: "#2563eb", color: "white",
-    borderRadius: "10px", fontSize: "13px",
-    fontWeight: "600", textDecoration: "none",
-    alignSelf: "flex-start",
-  },
-  detalleVacio: {
-    backgroundColor: "white", borderRadius: "16px",
-    border: "1px solid #e2e8f0", padding: "60px",
-    display: "flex", flexDirection: "column",
-    alignItems: "center", gap: "12px", textAlign: "center",
-  },
-  detalleVacioText: { fontSize: "14px", color: "#94a3b8" },
-};

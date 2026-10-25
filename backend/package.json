@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "test": "vitest run",
     "mcp": "node mcp/index.js",
     "mcp:dev": "nodemon mcp/index.js"
   },
@@ -27,6 +28,9 @@
     "stripe": "^22.1.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.1",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
   }
 }

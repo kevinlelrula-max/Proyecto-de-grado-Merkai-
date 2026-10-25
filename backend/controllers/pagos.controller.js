@@ -9,6 +9,20 @@ async function procesarPagoAprobado({ empresa_id, pedido_id, proveedor, referenc
   try {
     await client.query("BEGIN");
 
+    const { rows: [pedido] } = await client.query(
+      "SELECT total, empresa_id FROM pedidos_online WHERE id = $1 FOR UPDATE", [pedido_id]
+    );
+    // Un pago menor al total del pedido (o de otra tienda) no confirma el pedido
+    if (!pedido || Number(pedido.empresa_id) !== Number(empresa_id) || Number(monto) + 0.5 < Number(pedido.total)) {
+      await client.query("ROLLBACK");
+      console.error(`Pago inconsistente — pedido #${pedido_id}: pagado ${monto}, esperado ${pedido?.total}`);
+      await procesarPagoRechazado({
+        pedido_id, proveedor, referencia,
+        datos_respuesta: { ...datos_respuesta, motivo_rechazo: "monto_o_empresa_no_coinciden", monto_pagado: monto },
+      });
+      return;
+    }
+
     // 1. Registrar pago en tabla pagos_online
     await client.query(
       `INSERT INTO pagos_online (pedido_id, empresa_id, proveedor, referencia, estado, monto, datos_respuesta)
@@ -54,7 +68,19 @@ async function procesarPagoRechazado({ pedido_id, proveedor, referencia, datos_r
 // =========================
 export const crearPaymentIntent = async (req, res) => {
   try {
-    const { empresa_id, pedido_id, monto } = req.body;
+    const { empresa_id, pedido_id } = req.body;
+
+    // El monto sale del pedido guardado, nunca del navegador
+    const { rows: [pedido] } = await pool.query(
+      `SELECT total, estado FROM pedidos_online
+       WHERE id = $1 AND empresa_id = $2 AND cliente_id = $3`,
+      [pedido_id, empresa_id, req.user.id]
+    );
+    if (!pedido) return res.status(404).json({ error: "Pedido no encontrado" });
+    if (pedido.estado !== "pendiente") {
+      return res.status(400).json({ error: "Este pedido ya no está pendiente de pago" });
+    }
+    const monto = parseFloat(pedido.total);
 
     // Obtener llave privada de Stripe de esta empresa
     const llavePrivada = await getLlavePrivada(empresa_id, "stripe");

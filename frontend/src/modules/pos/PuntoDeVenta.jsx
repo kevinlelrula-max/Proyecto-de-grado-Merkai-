@@ -61,7 +61,7 @@ export default function PuntoDeVenta() {
   const [municipios, setMunicipios] = useState([]);
 
   useEffect(() => {
-    getProductos(token).then(setProductos);
+    getProductos(token).then(data => setProductos(data.filter(p => p.activo !== false)));
     getDepartamentos().then(setDepartamentos);
   }, []);
 

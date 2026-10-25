@@ -50,6 +50,10 @@ export const crearVenta = async (req, res) => {
         throw new Error("Producto no encontrado");
       }
 
+      if (producto.activo === false) {
+        throw new Error(`${producto.nombre} está desactivado y no se puede vender`);
+      }
+
       if (producto.stock < cantidad) {
         throw new Error(`Stock insuficiente para ${producto.nombre}`);
       }

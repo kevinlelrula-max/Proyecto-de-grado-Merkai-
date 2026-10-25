@@ -21,7 +21,7 @@ function getUnidadPredeterminada() {
 }
 
 export default function Productos() {
-  const { productos, agregar, eliminar, actualizar } = useProductos();
+  const { productos, agregar, eliminar, actualizar, toggleEstado } = useProductos();
   const { stockBajo: stockBajoLista, sugerenciasReorden } = useInventarioAnalytics();
   const { productos: productosRiesgo, loading: loadingPredictor } = useStockPredictor();
 
@@ -42,7 +42,7 @@ export default function Productos() {
   const indexPrimero = indexUltimo - productosPorPagina;
   const productosPaginados = productosFiltrados.slice(indexPrimero, indexUltimo);
   const totalPaginas = Math.ceil(productosFiltrados.length / productosPorPagina);
-  const stockBajo = productos.filter((p) => p.stock < 10).length;
+  const stockBajo = productos.filter((p) => p.activo !== false && p.stock < 10).length;
 
   useEffect(() => { setPaginaActual(1); }, [busqueda, productosPorPagina]);
 
@@ -54,7 +54,7 @@ export default function Productos() {
     const empresaNombre = config?.empresa?.nombre || "Mi Empresa";
     const fecha        = new Date().toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" });
 
-    const productosHTML = productosFiltrados.map(p => `
+    const productosHTML = productosFiltrados.filter(p => p.activo !== false).map(p => `
       <div class="producto">
         <h3>${p.nombre}</h3>
         <p class="precio">$${Number(p.precio).toLocaleString("es-CO")}</p>
@@ -217,6 +217,7 @@ export default function Productos() {
           <TablaProductos
             productos={productosPaginados}
             onEliminar={eliminar}
+            onToggleEstado={toggleEstado}
             onEditar={handleEditar}
             onAgregar={handleNuevo}
             vista={vista}

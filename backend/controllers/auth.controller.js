@@ -15,7 +15,7 @@ export const login = async (req, res) => {
 
     const result = await pool.query(
       `SELECT p.id, p.nombre, p.apellido, p.usuario, p.empresa_id, p.rol_id, p.contrasena,
-              e.codigo_referido
+              p.activo, e.codigo_referido
        FROM persona p
        LEFT JOIN empresas e ON e.id = p.empresa_id
        WHERE p.usuario = $1`,
@@ -35,6 +35,10 @@ export const login = async (req, res) => {
     const match = await bcrypt.compare(contrasena, user.contrasena);
     if (!match) {
       return res.status(401).json({ error: "Credenciales incorrectas" });
+    }
+
+    if (user.activo === false) {
+      return res.status(403).json({ error: "Tu usuario está desactivado. Comunícate con el administrador." });
     }
 
     // Verificar si el usuario tiene múltiples empresas en persona_empresas
@@ -95,7 +99,7 @@ export const loginGoogle = async (req, res) => {
 
     const result = await pool.query(
       `SELECT p.id, p.nombre, p.apellido, p.usuario, p.empresa_id, p.rol_id,
-              e.codigo_referido
+              p.activo, e.codigo_referido
        FROM persona p
        LEFT JOIN empresas e ON e.id = p.empresa_id
        WHERE p.usuario = $1`,
@@ -109,6 +113,9 @@ export const loginGoogle = async (req, res) => {
     const user = result.rows[0];
     if (user.rol_id === 4) {
       return res.status(403).json({ error: "Este usuario no tiene acceso a la plataforma" });
+    }
+    if (user.activo === false) {
+      return res.status(403).json({ error: "Tu usuario está desactivado. Comunícate con el administrador." });
     }
 
     const misEmpresas = await pool.query(

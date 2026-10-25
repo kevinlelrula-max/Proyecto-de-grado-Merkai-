@@ -9,7 +9,7 @@ import SegmentacionClientes from "./components/SegmentacionClientes";
 import ClientesDormidos from "./components/ClientesDormidos";
 
 export default function Clientes() {
-  const { clientes, agregarCliente, editarCliente, borrarCliente } = useClientes();
+  const { clientes, agregarCliente, editarCliente, borrarCliente, toggleEstadoCliente, borrarDatosCliente } = useClientes();
   const { clientes: clientesDormidos } = useClientesDormidos();
 
   const [tab, setTab] = useState("lista");
@@ -139,6 +139,8 @@ export default function Clientes() {
         clientes={clientesPaginados}
         onEditar={handleEditar}
         onEliminar={borrarCliente}
+        onToggleEstado={toggleEstadoCliente}
+        onBorrarDatos={borrarDatosCliente}
         onVerPerfil={(id) => setVista360Id(id)}
         onAgregar={() => { setMostrarForm(true); }}
       />

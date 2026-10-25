@@ -1,6 +1,7 @@
 import pool from "../config/db.js";
 import multer from "multer";
 import { subirImagen } from "../config/cloudinary.js";
+import { getNivelLealtadCliente } from "../utils/calcularPedido.js";
 
 // =========================
 // CONFIGURACIÓN DE MULTER
@@ -22,6 +23,7 @@ export const getProductos = async (req, res) => {
       `SELECT p.id, p.empresa_id, p.nombre, p.descripcion, p.precio, p.precio_costo,
               p.ganancia_porcentaje, p.precio_mayoreo, p.stock, p.stock_minimo,
               p.stock_maximo, p.unidad, p.codigo_barras, p.categoria_id, p.imagen_url,
+              p.activo,
               COALESCE(
                 json_agg(json_build_object('id', pi.id, 'url', pi.url) ORDER BY pi.orden)
                 FILTER (WHERE pi.id IS NOT NULL), '[]'
@@ -30,7 +32,7 @@ export const getProductos = async (req, res) => {
        LEFT JOIN producto_imagenes pi ON pi.producto_id = p.id
        WHERE p.empresa_id = $1
        GROUP BY p.id
-       ORDER BY p.nombre ASC`,
+       ORDER BY p.activo DESC, p.nombre ASC`,
       [empresa_id]
     );
     res.json(result.rows);
@@ -183,10 +185,47 @@ export const eliminarProducto = async (req, res) => {
     );
     if (!prod.rows.length) return res.status(404).json({ error: "Producto no encontrado" });
 
+    // Con ventas o pedidos se desactiva en vez de borrar, para no romper el historial ni los reportes
+    const { rows: [historial] } = await pool.query(
+      `SELECT (SELECT COUNT(*) FROM detalle_venta         WHERE producto_id = $1)::int AS ventas,
+              (SELECT COUNT(*) FROM detalle_pedido_online WHERE producto_id = $1)::int AS pedidos`,
+      [id]
+    );
+    if (historial.ventas > 0 || historial.pedidos > 0) {
+      return res.status(409).json({
+        code: "TIENE_HISTORIAL",
+        error: `El producto aparece en ${historial.ventas} venta(s) y ${historial.pedidos} pedido(s). ` +
+               "Desactívalo para ocultarlo de la tienda y del POS.",
+      });
+    }
+
     await pool.query("DELETE FROM productos WHERE id = $1 AND empresa_id = $2", [id, empresa_id]);
     res.json({ message: "Producto eliminado correctamente" });
   } catch (error) {
+    if (error.code === "23503") {
+      return res.status(409).json({
+        code: "TIENE_HISTORIAL",
+        error: "El producto tiene registros asociados. Desactívalo para ocultarlo de la tienda y del POS.",
+      });
+    }
+    console.error("Error eliminarProducto:", error);
     res.status(500).json({ error: "Error al eliminar producto" });
+  }
+};
+
+export const toggleProducto = async (req, res) => {
+  try {
+    const { rows: [producto] } = await pool.query(
+      `UPDATE productos SET activo = NOT activo
+       WHERE id = $1 AND empresa_id = $2
+       RETURNING id, activo`,
+      [req.params.id, req.user.empresa_id]
+    );
+    if (!producto) return res.status(404).json({ error: "Producto no encontrado" });
+    res.json(producto);
+  } catch (error) {
+    console.error("Error toggleProducto:", error);
+    res.status(500).json({ error: "Error al cambiar el estado del producto" });
   }
 };
 
@@ -208,7 +247,7 @@ export const getProductosPorEmpresaPublico = async (req, res) => {
        FROM productos p
        LEFT JOIN producto_imagenes pi ON pi.producto_id = p.id
        LEFT JOIN categoria c ON c.id = p.categoria_id
-       WHERE p.empresa_id = $1
+       WHERE p.empresa_id = $1 AND p.activo
        GROUP BY p.id, c.nombre
        ORDER BY p.nombre ASC`,
       [id]
@@ -323,6 +362,11 @@ export const eliminarNivelLealtad = async (req, res) => {
     await pool.query("DELETE FROM niveles_lealtad WHERE id=$1 AND empresa_id=$2", [id, empresa_id]);
     res.json({ message: "Nivel eliminado correctamente" });
   } catch (error) {
+    if (error.code === "23503") {
+      return res.status(409).json({
+        error: "Este nivel se usa en la configuración de referidos. Desactívalo o quítalo de esa configuración primero.",
+      });
+    }
     console.error("Error eliminarNivelLealtad:", error);
     res.status(500).json({ error: "Error al eliminar nivel de lealtad" });
   }
@@ -336,33 +380,7 @@ export const getNivelCliente = async (req, res) => {
   try {
     const { clienteId, empresaId } = req.params;
 
-    const ventasPOS = await pool.query(
-      `SELECT COALESCE(SUM(total), 0) AS total FROM ventas
-       WHERE cliente_id=$1 AND empresa_id=$2
-       AND DATE_TRUNC('month', fecha) = DATE_TRUNC('month', NOW())`,
-      [clienteId, empresaId]
-    );
-
-    const ventasOnline = await pool.query(
-      `SELECT COALESCE(SUM(total), 0) AS total FROM pedidos_online
-       WHERE cliente_id=$1 AND empresa_id=$2
-       AND estado NOT IN ('cancelado', 'pendiente')
-       AND DATE_TRUNC('month', fecha_pedido) = DATE_TRUNC('month', NOW())`,
-      [clienteId, empresaId]
-    );
-
-    const totalMes =
-      parseFloat(ventasPOS.rows[0].total) +
-      parseFloat(ventasOnline.rows[0].total);
-
-    const niveles = await pool.query(
-      `SELECT * FROM niveles_lealtad
-       WHERE empresa_id=$1 AND activo=true AND monto_minimo <= $2
-       ORDER BY monto_minimo DESC LIMIT 1`,
-      [empresaId, totalMes]
-    );
-
-    const nivelActual = niveles.rows[0] || null;
+    const { totalMes, nivel: nivelActual } = await getNivelLealtadCliente(clienteId, empresaId);
 
     res.json({
       total_mes:    totalMes,

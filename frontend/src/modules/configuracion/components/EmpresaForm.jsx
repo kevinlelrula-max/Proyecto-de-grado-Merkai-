@@ -1,167 +1,74 @@
-import { useRef } from "react";
-import { ImageIcon, MessageCircle, Camera, Globe } from "lucide-react";
-
-const UNIDADES = [
-  { value: "unidad",  label: "Unidad / Pieza" },
-  { value: "kg",      label: "Kilogramo (kg)" },
-  { value: "gramo",   label: "Gramo (g)" },
-  { value: "litro",   label: "Litro (L)" },
-  { value: "ml",      label: "Mililitro (ml)" },
-  { value: "metro",   label: "Metro (m)" },
-  { value: "caja",    label: "Caja" },
-  { value: "paquete", label: "Paquete" },
-  { value: "docena",  label: "Docena" },
-];
+import { Building2, Phone, Mail, MapPin, Hash, Clock, MessageCircle, Camera, Globe, Share2 } from "lucide-react";
+import { Tarjeta, Campo, Area } from "./ui";
+import SubidorLogo from "./SubidorLogo";
 
 const REDES = [
-  { key: "whatsapp",  label: "WhatsApp",  Icon: MessageCircle, placeholder: "573001234567 (sin + ni espacios)" },
+  { key: "whatsapp",  label: "WhatsApp",  Icon: MessageCircle, placeholder: "573001234567", ayuda: "Con indicativo de país, sin + ni espacios." },
   { key: "instagram", label: "Instagram", Icon: Camera,        placeholder: "@minegocio" },
   { key: "facebook",  label: "Facebook",  Icon: Globe,         placeholder: "minegocio" },
 ];
 
-export default function EmpresaForm({ empresa, logoPreview, onChange, onLogoChange }) {
-  const fileInputRef = useRef(null);
-
-  const campos = [
-    { key: "nombre",    label: "Nombre de la empresa", tipo: "text",  full: true,  placeholder: "Pesquera Estrada" },
-    { key: "nit",       label: "NIT",                  tipo: "text",  full: false, placeholder: "900.123.456-7" },
-    { key: "telefono",  label: "Teléfono",             tipo: "tel",   full: false, placeholder: "+57 8 785 0000" },
-    { key: "email",     label: "Correo electrónico",   tipo: "email", full: true,  placeholder: "ventas@empresa.com" },
-    { key: "direccion", label: "Dirección",            tipo: "text",  full: true,  placeholder: "Cra. 5 #12-30, Neiva, Huila" },
-  ];
-
-  function handleFileChange(e) {
-    const file = e.target.files?.[0];
-    if (file) onLogoChange(file);
-  }
+export default function EmpresaForm({ empresa, logoPreview, errores = {}, onChange, onLogoChange }) {
+  const campo = (key) => ({
+    id: `emp-${key}`,
+    value: empresa[key] || "",
+    onChange: (e) => onChange(key, e.target.value),
+    error: errores[key],
+  });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
 
-      {/* Logo */}
-      <div className="bg-white rounded-2xl border-[1.5px] border-slate-300 shadow-[0_2px_8px_rgba(0,0,0,0.08)] p-6">
-        <h3 className="text-base font-semibold text-slate-800 mb-1">Logo de la empresa</h3>
-        <p className="text-sm text-slate-500 mb-4">
-          Aparece en el dashboard y en los PDFs de ventas
-        </p>
-
-        <div
-          onClick={() => fileInputRef.current?.click()}
-          className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 cursor-pointer transition"
-        >
-          {logoPreview ? (
-            <img src={logoPreview} alt="Logo empresa" className="h-20 object-contain rounded-lg" />
-          ) : (
-            <>
-              <span className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500">
-                <ImageIcon size={20} />
-              </span>
-              <p className="text-sm text-gray-500">Haz clic para subir el logo</p>
-              <p className="text-xs text-gray-400">PNG, JPG · máx. 2 MB</p>
-            </>
-          )}
-          {logoPreview && (
-            <p className="text-xs text-blue-500 mt-1">Haz clic para cambiar</p>
-          )}
+      <Tarjeta Icon={Building2} titulo="Identidad" descripcion="Cómo se presenta tu negocio en el panel, los documentos y la tienda en línea">
+        <div className="mb-7">
+          <SubidorLogo logoPreview={logoPreview} nombre={empresa.nombre} onLogoChange={onLogoChange} />
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-      </div>
+        <div className="space-y-5">
+          <Campo {...campo("nombre")} label="Nombre de la empresa" requerido placeholder="Ej.: Pesquera Estrada" />
+          <Area
+            {...campo("descripcion")}
+            label="Descripción del negocio"
+            rows={3}
+            max={300}
+            placeholder="Cuéntales a tus clientes qué vendes y qué te hace diferente."
+            ayuda="Se muestra en la portada de tu tienda en línea."
+          />
+        </div>
+      </Tarjeta>
 
-      {/* Datos */}
-      <div className="bg-white rounded-2xl border-[1.5px] border-slate-300 shadow-[0_2px_8px_rgba(0,0,0,0.08)] p-6">
-        <h3 className="text-base font-semibold text-slate-800 mb-1">Datos de la empresa</h3>
-        <p className="text-sm text-slate-500 mb-5">
-          Información que aparece en los documentos generados
-        </p>
+      <Tarjeta Icon={Phone} titulo="Contacto y ubicación" descripcion="Datos que aparecen en tus documentos y en la sección de contacto de la tienda">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <Campo {...campo("nit")} label="NIT" Icon={Hash} placeholder="900.123.456-7" />
+          <Campo {...campo("telefono")} label="Teléfono" Icon={Phone} type="tel" placeholder="+57 8 785 0000" />
+          <Campo {...campo("email")} label="Correo electrónico" Icon={Mail} type="email" placeholder="ventas@empresa.com" className="sm:col-span-2" />
+          <Campo {...campo("direccion")} label="Dirección" Icon={MapPin} placeholder="Cra. 5 #12-30, Neiva, Huila" className="sm:col-span-2" />
+          <Campo
+            {...campo("horario")}
+            label="Horario de atención"
+            Icon={Clock}
+            placeholder="Lunes a sábado, 7:00 a. m. – 6:00 p. m."
+            ayuda="Se muestra en la portada y en el contacto de tu tienda."
+            className="sm:col-span-2"
+          />
+        </div>
+      </Tarjeta>
 
-        <div className="grid grid-cols-2 gap-5">
-          {campos.map((campo) => (
-            <div key={campo.key} className={campo.full ? "col-span-2" : "col-span-1"}>
-              <label className="block text-[13px] font-semibold text-slate-800 mb-2">
-                {campo.label}
-              </label>
-              <input
-                type={campo.tipo}
-                value={empresa[campo.key] || ""}
-                placeholder={campo.placeholder}
-                onChange={(e) => onChange(campo.key, e.target.value)}
-                className="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-[15px] text-slate-900 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-              />
-            </div>
-          ))}
-
-          {/* Unidad predeterminada */}
-          <div className="col-span-2">
-            <label className="block text-[13px] font-semibold text-slate-800 mb-2">
-              Unidad predeterminada para productos nuevos
-            </label>
-            <select
-              value={empresa.unidad_predeterminada || "unidad"}
-              onChange={(e) => onChange("unidad_predeterminada", e.target.value)}
-              className="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-[15px] text-slate-900 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-            >
-              {UNIDADES.map((u) => (
-                <option key={u.value} value={u.value}>{u.label}</option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-400 mt-1">
-              Se usará como valor por defecto al crear un nuevo producto. Cada producto puede cambiarse individualmente.
-            </p>
-          </div>
-
-          {/* IVA */}
-          <div className="col-span-1">
-            <label className="block text-[13px] font-semibold text-slate-800 mb-2">
-              IVA / Impuesto (%)
-            </label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value={empresa.iva_porcentaje ?? 0}
-              onChange={(e) => onChange("iva_porcentaje", Number(e.target.value))}
-              className="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-[15px] text-slate-900 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+      <Tarjeta Icon={Share2} titulo="Redes sociales" descripcion="Aparecen en la sección de contacto de tu tienda">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {REDES.map(({ key, label, Icon, placeholder, ayuda }, i) => (
+            <Campo
+              key={key}
+              {...campo(key)}
+              label={label}
+              Icon={Icon}
+              placeholder={placeholder}
+              ayuda={ayuda}
+              className={i === 0 ? "sm:col-span-2" : ""}
             />
-            <p className="text-xs text-slate-400 mt-1">
-              Ej: 19 para Colombia. Se aplica al subtotal en ventas y tienda. Usa 0 para desactivar.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Redes sociales */}
-      <div className="bg-white rounded-2xl border-[1.5px] border-slate-300 shadow-[0_2px_8px_rgba(0,0,0,0.08)] p-6">
-        <h3 className="text-base font-semibold text-slate-800 mb-1">Redes sociales</h3>
-        <p className="text-sm text-slate-500 mb-5">Aparecen en la sección de contacto de tu tienda</p>
-
-        <div className="space-y-4">
-          {REDES.map(({ key, label, Icon, placeholder }) => (
-            <div key={key} className="flex items-center gap-3">
-              <span className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 flex-shrink-0">
-                <Icon size={16} />
-              </span>
-              <div className="flex-1">
-                <label className="block text-[13px] font-semibold text-slate-800 mb-2">{label}</label>
-                <input
-                  type="text"
-                  value={empresa[key] || ""}
-                  onChange={(e) => onChange(key, e.target.value)}
-                  placeholder={placeholder}
-                  className="w-full border-2 border-slate-300 rounded-xl px-4 py-3 text-[15px] text-slate-900 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
           ))}
         </div>
-      </div>
+      </Tarjeta>
 
     </div>
   );

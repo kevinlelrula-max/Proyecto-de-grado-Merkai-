@@ -38,6 +38,13 @@ export const eliminarProducto = async (id, token) => {
   return res.data;
 };
 
+export const cambiarEstadoProducto = async (id, token) => {
+  const res = await axios.patch(`${API}/${id}/estado`, null, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.data;
+};
+
 export const eliminarImagenProducto = async (productoId, imgId, token) => {
   const res = await axios.delete(`${API}/${productoId}/imagen/${imgId}`, {
     headers: { Authorization: `Bearer ${token}` }

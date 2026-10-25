@@ -120,7 +120,7 @@ export const toggleUsuario = async (req, res) => {
 
     const result = await pool.query(
       `UPDATE persona
-       SET activo = NOT activo
+       SET activo = NOT COALESCE(activo, true)
        WHERE id = $1 AND empresa_id = $2 AND rol_id != 4
        RETURNING id, nombre, activo`,
       [id, empresa_id]
@@ -149,24 +149,34 @@ export const eliminarUsuario = async (req, res) => {
       return res.status(400).json({ error: "No puedes eliminarte a ti mismo" });
     }
 
-    // Verificar si tiene ventas registradas
-    const ventas = await pool.query(
-      `SELECT COUNT(*) FROM ventas WHERE administrador_id = $1`, [id]
+    const { rows: [historial] } = await pool.query(
+      `SELECT (SELECT COUNT(*) FROM ventas        WHERE administrador_id = $1)::int AS ventas,
+              (SELECT COUNT(*) FROM caja_sesiones WHERE usuario_id       = $1)::int AS cajas`,
+      [id]
     );
 
-    if (parseInt(ventas.rows[0].count) > 0) {
-      return res.status(400).json({
-        error: "No se puede eliminar — el usuario tiene ventas registradas. Desactívalo en su lugar."
+    if (historial.ventas > 0 || historial.cajas > 0) {
+      return res.status(409).json({
+        code: "TIENE_HISTORIAL",
+        error: `No se puede eliminar: el usuario tiene ${historial.ventas} venta(s) y ` +
+               `${historial.cajas} turno(s) de caja registrados. Desactívalo en su lugar.`,
       });
     }
 
-    await pool.query(
+    const result = await pool.query(
       `DELETE FROM persona WHERE id = $1 AND empresa_id = $2 AND rol_id != 4`,
       [id, empresa_id]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Usuario no encontrado" });
 
     res.json({ message: "Usuario eliminado" });
   } catch (error) {
+    if (error.code === "23503") {
+      return res.status(409).json({
+        code: "TIENE_HISTORIAL",
+        error: "No se puede eliminar: el usuario tiene registros asociados. Desactívalo en su lugar.",
+      });
+    }
     console.error(error);
     res.status(500).json({ error: "Error al eliminar usuario" });
   }

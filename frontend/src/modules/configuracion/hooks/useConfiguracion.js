@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { toast } from "react-toastify";
 import {
   getConfiguracion,
@@ -43,11 +43,24 @@ function guardarEnStorage(empresa, metodos) {
   } catch { /* storage lleno */ }
 }
 
+export function validarEmpresa(e) {
+  const errores = {};
+  if (!e.nombre?.trim()) errores.nombre = "El nombre de la empresa es obligatorio";
+  if (e.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email)) errores.email = "Escribe un correo válido";
+  if (e.whatsapp && !/^\d{8,15}$/.test(e.whatsapp)) errores.whatsapp = "Solo números con indicativo de país, sin + ni espacios";
+  const iva = Number(e.iva_porcentaje);
+  if (Number.isNaN(iva) || iva < 0 || iva > 100) errores.iva_porcentaje = "El IVA debe estar entre 0 y 100";
+  return errores;
+}
+
+const foto = (empresa, metodos) => JSON.stringify({ empresa, metodos });
+
 export function useConfiguracion() {
   const local = cargarDesdeStorage();
 
   const [empresa, setEmpresa]         = useState(local?.empresa || EMPRESA_INICIAL);
   const [metodos, setMetodos]         = useState(local?.metodos || METODOS_INICIALES);
+  const [base, setBase]               = useState(() => foto(local?.empresa || EMPRESA_INICIAL, local?.metodos || METODOS_INICIALES));
   const [logoPreview, setLogoPreview]     = useState(local?.empresa?.logoUrl || null);
   const [logoFile, setLogoFile]           = useState(null);
   const [bannerPreview, setBannerPreview] = useState(local?.empresa?.banner_url || null);
@@ -56,6 +69,15 @@ export function useConfiguracion() {
   const [guardando, setGuardando]     = useState(false);
   const [error, setError]             = useState(null);
   const [exito, setExito]             = useState(false);
+  const [intento, setIntento]         = useState(false);
+
+  const errores = useMemo(() => validarEmpresa(empresa), [empresa]);
+  // "Obligatorio" solo se muestra después de intentar guardar; el resto, en cuanto el valor es inválido
+  const erroresVisibles = useMemo(() => (intento ? errores : { ...errores, nombre: undefined }), [errores, intento]);
+  const hayCambios = useMemo(
+    () => !!logoFile || !!bannerFile || foto(empresa, metodos) !== base,
+    [empresa, metodos, base, logoFile, bannerFile]
+  );
 
   // ── Carga inicial desde backend ──────────────────────────────────
   const cargarConfiguracion = useCallback(async () => {
@@ -63,33 +85,33 @@ export function useConfiguracion() {
     try {
       const data = await getConfiguracion();
 
-     const nuevaEmpresa = {
-  nombre:             data.nombre             || "",
-  nit:                data.nit                || "",
-  telefono:           data.telefono           || "",
-  email:              data.email              || "",
-  direccion:          data.direccion          || "",
-  logoUrl:            data.logoUrl            || null,
-  slug:               data.slug               || "",
-  descripcion:        data.descripcion        || "",
-  color_primario:     data.color_primario     || "#0F6E56",
-  color_secundario:   data.color_secundario   || "#0B1628",
-  banner_url:         data.banner_url         || null,
-  instagram:          data.instagram          || "",
-  whatsapp:           data.whatsapp           || "",
-  facebook:           data.facebook           || "",
-  horario:            data.horario            || "",
-  hero_titulo:        data.hero_titulo        || "",
-  hero_subtitulo:     data.hero_subtitulo     || "",
-  hero_btn_texto:     data.hero_btn_texto     || "",
-  nosotros_titulo:      data.nosotros_titulo      || "",
-  nosotros_contenido:   data.nosotros_contenido   || "",
-  unidad_predeterminada:         data.unidad_predeterminada         || "unidad",
-  fuente:                        data.fuente                        || "Inter",
-  productos_destacados_cantidad: data.productos_destacados_cantidad || 4,
-  footer_texto:                  data.footer_texto                  || "",
-  iva_porcentaje:                Number(data.iva_porcentaje)        || 0,
-};
+      const nuevaEmpresa = {
+        nombre:             data.nombre             || "",
+        nit:                data.nit                || "",
+        telefono:           data.telefono           || "",
+        email:              data.email              || "",
+        direccion:          data.direccion          || "",
+        logoUrl:            data.logoUrl            || null,
+        slug:               data.slug               || "",
+        descripcion:        data.descripcion        || "",
+        color_primario:     data.color_primario     || "#0F6E56",
+        color_secundario:   data.color_secundario   || "#0B1628",
+        banner_url:         data.banner_url         || null,
+        instagram:          data.instagram          || "",
+        whatsapp:           data.whatsapp           || "",
+        facebook:           data.facebook           || "",
+        horario:            data.horario            || "",
+        hero_titulo:        data.hero_titulo        || "",
+        hero_subtitulo:     data.hero_subtitulo     || "",
+        hero_btn_texto:     data.hero_btn_texto     || "",
+        nosotros_titulo:      data.nosotros_titulo      || "",
+        nosotros_contenido:   data.nosotros_contenido   || "",
+        unidad_predeterminada:         data.unidad_predeterminada         || "unidad",
+        fuente:                        data.fuente                        || "Inter",
+        productos_destacados_cantidad: data.productos_destacados_cantidad || 4,
+        footer_texto:                  data.footer_texto                  || "",
+        iva_porcentaje:                Number(data.iva_porcentaje)        || 0,
+      };
 
       // Mezcla los metodos del backend con los labels del frontend
       const nuevosMetodos = METODOS_INICIALES.map((m) => {
@@ -99,8 +121,12 @@ export function useConfiguracion() {
 
       setEmpresa(nuevaEmpresa);
       setMetodos(nuevosMetodos);
-      if (data.logoUrl) setLogoPreview(data.logoUrl);
-      if (data.banner_url) setBannerPreview(data.banner_url);
+      setBase(foto(nuevaEmpresa, nuevosMetodos));
+      setLogoFile(null);
+      setBannerFile(null);
+      setLogoPreview(data.logoUrl || null);
+      setBannerPreview(data.banner_url || null);
+      setIntento(false);
       guardarEnStorage(nuevaEmpresa, nuevosMetodos);
     } catch {
       // Backend no disponible — usa datos de localStorage (ya están en estado)
@@ -138,10 +164,16 @@ export function useConfiguracion() {
 
   // ── Guardar ───────────────────────────────────────────────────────
   const guardar = useCallback(async () => {
-    setGuardando(true);
+    setIntento(true);
     setError(null);
     setExito(false);
 
+    if (Object.keys(errores).length > 0) {
+      toast.error("Revisa los campos marcados en rojo");
+      return false;
+    }
+
+    setGuardando(true);
     // Persiste localmente siempre
     guardarEnStorage(empresa, metodos);
 
@@ -175,39 +207,65 @@ export function useConfiguracion() {
         metodos.map(({ key, activo }) => ({ key, activo }))
       );
 
+      const empresaFinal = { ...empresa };
+
       if (logoFile) {
         const { logoUrl } = await uploadLogo(logoFile);
-        setEmpresa((prev) => ({ ...prev, logoUrl }));
+        empresaFinal.logoUrl = logoUrl;
         setLogoFile(null);
       }
 
       if (bannerFile) {
         const { bannerUrl } = await uploadBanner(bannerFile);
-        setEmpresa((prev) => ({ ...prev, banner_url: bannerUrl }));
+        empresaFinal.banner_url = bannerUrl;
         setBannerFile(null);
       }
 
+      setEmpresa(empresaFinal);
+      setBase(foto(empresaFinal, metodos));
+      guardarEnStorage(empresaFinal, metodos);
+      // Avisa al panel para que actualice el nombre y el logo del encabezado sin recargar
+      window.dispatchEvent(new CustomEvent("configuracion:guardada", {
+        detail: { nombre: empresaFinal.nombre, logoUrl: empresaFinal.logoUrl },
+      }));
+
       setExito(true);
       toast.success("Configuración guardada correctamente");
-    } catch (err) {
-      // Guardado local funcionó — avisamos que el servidor falló
-      setError("Cambios guardados localmente. No se pudo sincronizar con el servidor.");
-      setExito(true); // igual mostramos éxito parcial
-      toast.warn("Cambios guardados localmente. Sin conexión con el servidor.");
+      setTimeout(() => setExito(false), 3000);
+      return true;
+    } catch {
+      // El guardado local funcionó, pero el servidor no: no se muestra como éxito
+      setError("No se pudo guardar en el servidor. Tus cambios quedaron solo en este equipo; intenta de nuevo.");
+      toast.warn("No se pudo guardar en el servidor. Intenta de nuevo.");
+      return false;
     } finally {
       setGuardando(false);
-      setTimeout(() => { setExito(false); setError(null); }, 4000);
     }
-  }, [empresa, metodos, logoFile]);
+  }, [empresa, metodos, logoFile, bannerFile, errores]);
+
+  const descartar = useCallback(() => {
+    const guardado = JSON.parse(base);
+    setEmpresa(guardado.empresa);
+    setMetodos(guardado.metodos);
+    setLogoFile(null);
+    setBannerFile(null);
+    setLogoPreview(guardado.empresa.logoUrl || null);
+    setBannerPreview(guardado.empresa.banner_url || null);
+    setIntento(false);
+    setError(null);
+    setExito(false);
+  }, [base]);
 
   return {
     empresa, metodos, logoPreview, bannerPreview,
     cargando, guardando, error, exito,
+    errores: erroresVisibles, hayCambios,
     cargarConfiguracion,
     handleEmpresaChange,
     toggleMetodo,
     handleLogoChange,
     handleBannerChange,
     guardar,
+    descartar,
   };
 }

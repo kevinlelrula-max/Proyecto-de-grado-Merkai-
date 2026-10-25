@@ -170,7 +170,7 @@ export const getInsight = async (req, res) => {
       pool.query(
         `SELECT nombre, stock, stock_minimo
          FROM productos
-         WHERE empresa_id=$1 AND stock_minimo IS NOT NULL AND stock<=stock_minimo
+         WHERE empresa_id=$1 AND activo AND stock_minimo IS NOT NULL AND stock<=stock_minimo
          ORDER BY stock ASC LIMIT 5`,
         [empresa_id]
       ),

@@ -4,9 +4,8 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas, metodoPagoId, cuponId, descuentoCupon, onPedidoCreado }) {
+export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas, metodoPagoId, cuponId, departamentoId, onPedidoCreado }) {
   const clienteToken = localStorage.getItem("cliente_token");
-  const clienteId    = localStorage.getItem("cliente_id");
   const headers      = { Authorization: `Bearer ${clienteToken}` };
 
   const [abierto, setAbierto]               = useState(false);
@@ -14,6 +13,7 @@ export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas,
   const [clientSecret, setClientSecret]     = useState(null);
   const [loadingIntent, setLoadingIntent]   = useState(false);
   const [errorCheckout, setErrorCheckout]   = useState("");
+  const [montoPedido, setMontoPedido]       = useState(null);
   const [pasarelasActivas, setPasarelasActivas] = useState([]);
   const [cargandoPasarelas, setCargandoPasarelas] = useState(false);
 
@@ -56,17 +56,15 @@ export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas,
           `${API_URL}/api/pedidos`,
           {
             empresa_id:        empresaId,
-            cliente_id:        Number(clienteId),
             metodo_pago_id:    metodoPagoId,
             direccion_entrega: direccion,
             notas:             notas || null,
             total:             totalPrecio,
             cupon_id:          cuponId   || null,
-            descuento:         descuentoCupon || 0,
+            departamento_id:   departamentoId ?? null,
             detalle: carrito.map(item => ({
               producto_id:     item.id,
               cantidad:        item.cantidad,
-              precio_unitario: item.precio,
             })),
           },
           { headers }
@@ -75,10 +73,11 @@ export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas,
         if (!pedidoRes.data.id) throw new Error("Error creando pedido");
 
         const pedidoId = pedidoRes.data.id;
+        setMontoPedido(pedidoRes.data.total);
 
         const intentRes = await axios.post(
           `${API_URL}/api/pagos/crear-payment-intent`,
-          { empresa_id: empresaId, pedido_id: pedidoId, monto: totalPrecio },
+          { empresa_id: empresaId, pedido_id: pedidoId },
           { headers }
         );
 
@@ -93,12 +92,13 @@ export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas,
     }
 
     setAbierto(true);
-  }, [cargarPasarelas, empresaId, clienteId, carrito, totalPrecio, direccion, notas, metodoPagoId, cuponId, descuentoCupon, headers, onPedidoCreado]);
+  }, [cargarPasarelas, empresaId, carrito, totalPrecio, direccion, notas, metodoPagoId, cuponId, departamentoId, headers, onPedidoCreado]);
 
   const cerrarCheckout = useCallback(() => {
     setAbierto(false);
     setClientSecret(null);
     setErrorCheckout("");
+    setMontoPedido(null);
   }, []);
 
   const tieneStripe   = pasarelasActivas.some(p => p.proveedor === "stripe");
@@ -111,6 +111,7 @@ export function useCheckout({ empresaId, carrito, totalPrecio, direccion, notas,
     clientSecret,
     loadingIntent,
     errorCheckout,
+    montoPedido,
     pasarelasActivas,
     cargandoPasarelas,
     tienePasarela,

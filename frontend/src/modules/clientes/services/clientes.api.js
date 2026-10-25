@@ -30,6 +30,20 @@ export const eliminarCliente = async (id, token) => {
   return res.data;
 };
 
+export const cambiarEstadoCliente = async (id, token) => {
+  const res = await axios.patch(`${API}/${id}/estado`, null, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.data;
+};
+
+export const anonimizarCliente = async (id, token) => {
+  const res = await axios.post(`${API}/${id}/anonimizar`, null, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return res.data;
+};
+
 export const buscarClientes = async (query, token) => {
   const res = await axios.get(`${API}/buscar?q=${query}`, {
     headers: { Authorization: `Bearer ${token}` }

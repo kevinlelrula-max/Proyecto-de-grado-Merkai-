@@ -128,12 +128,15 @@ export function useLealtad() {
         method: "DELETE",
         headers: { Authorization: `Bearer ${getToken()}` },
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo eliminar el nivel");
+      }
       await fetchNiveles();
       toast.success("Nivel eliminado");
-    } catch {
-      setError("No se pudo eliminar el nivel.");
-      toast.error("No se pudo eliminar el nivel");
+    } catch (err) {
+      setError(err.message);
+      toast.error(err.message);
     }
   }, [fetchNiveles]);
 

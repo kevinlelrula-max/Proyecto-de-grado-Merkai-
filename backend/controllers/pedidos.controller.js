@@ -2,6 +2,7 @@ import pool from "../config/db.js";
 import { crearNotificacion } from "../utils/notificaciones.js";
 import { procesarReferidoPrimeraCompra } from "./referidos.controller.js";
 import { enviarEmailEstadoPedido, enviarEmailNuevoPedido } from "../utils/email.js";
+import { calcularPedido, ErrorPedido } from "../utils/calcularPedido.js";
 
 // =========================
 // 🛒 CREAR PEDIDO ONLINE
@@ -9,59 +10,89 @@ import { enviarEmailEstadoPedido, enviarEmailNuevoPedido } from "../utils/email.
 // =========================
 export const crearPedido = async (req, res) => {
   const client = await pool.connect();
+  let enTransaccion = false;
   try {
     const {
       empresa_id,
-      cliente_id,
       metodo_pago_id,
       direccion_entrega,
       notas,
-      total,
-      detalle, // [{ producto_id, cantidad, precio_unitario }]
+      detalle, // [{ producto_id, cantidad }] — precios y total se calculan en el servidor
       cupon_id,
-      descuento,
+      departamento_id,
+      total: totalMostrado,
     } = req.body;
+
+    if (req.user.rol_id !== 4) {
+      return res.status(403).json({ error: "Solo los clientes pueden crear pedidos en la tienda" });
+    }
+    const cliente_id = req.user.id;
 
     if (!detalle || detalle.length === 0) {
       return res.status(400).json({ error: "El pedido debe tener al menos un producto" });
     }
 
-    await client.query("BEGIN");
+    const calculo = await calcularPedido({ empresa_id, cliente_id, detalle, cupon_id, departamento_id }, client);
+    const total = calculo.total;
 
-    // Insertar pedido (con cupón si aplica)
+    // Nunca cobrar más de lo que el cliente vio; si los precios o descuentos cambiaron, debe revisar
+    if (totalMostrado !== undefined && total > Number(totalMostrado) + 1) {
+      return res.status(409).json({
+        code: "TOTAL_CAMBIO",
+        error: `El total de tu pedido cambió a $${total.toLocaleString("es-CO")} ` +
+               "(se actualizaron precios o descuentos). Revisa tu carrito antes de confirmar.",
+        total_actual: total,
+      });
+    }
+
+    await client.query("BEGIN");
+    enTransaccion = true;
+
     const pedidoResult = await client.query(
       `INSERT INTO pedidos_online
         (empresa_id, cliente_id, metodo_pago_id, direccion_entrega, notas, total, estado, cupon_id, descuento)
        VALUES ($1, $2, $3, $4, $5, $6, 'pendiente', $7, $8)
        RETURNING *`,
-      [empresa_id, cliente_id, metodo_pago_id, direccion_entrega, notas || null, total, cupon_id || null, descuento || 0]
+      [empresa_id, cliente_id, metodo_pago_id, direccion_entrega, notas || null, total,
+       calculo.cupon?.id || null, calculo.descuento_cupon + calculo.descuento_referido]
     );
 
     const pedido = pedidoResult.rows[0];
 
-    // Insertar detalle
-    for (const item of detalle) {
+    for (const item of calculo.items) {
       await client.query(
         `INSERT INTO detalle_pedido_online (pedido_id, producto_id, cantidad, precio_unitario)
          VALUES ($1, $2, $3, $4)`,
         [pedido.id, item.producto_id, item.cantidad, item.precio_unitario]
       );
+
+      // Descuento atómico: si otro pedido se llevó el stock en este instante, se rechaza
+      const { rowCount } = await client.query(
+        `UPDATE productos SET stock = stock - $1
+         WHERE id = $2 AND empresa_id = $3 AND stock >= $1`,
+        [item.cantidad, item.producto_id, empresa_id]
+      );
+      if (rowCount === 0) throw new ErrorPedido(409, "Un producto del carrito se quedó sin stock. Actualiza tu carrito.");
     }
 
-    // Registrar uso del cupón si se aplicó
-    if (cupon_id && descuento > 0) {
+    if (calculo.cupon) {
+      // Condición en el UPDATE para que dos pedidos simultáneos no superen el límite de usos
+      const { rowCount } = await client.query(
+        `UPDATE cupones SET usos_actuales = usos_actuales + 1
+         WHERE id = $1 AND (usos_totales IS NULL OR usos_actuales < usos_totales)`,
+        [calculo.cupon.id]
+      );
+      if (rowCount === 0) throw new ErrorPedido(409, "El cupón acaba de alcanzar su límite de usos. Quítalo e intenta de nuevo.");
+
       await client.query(
         `INSERT INTO cupones_usos (cupon_id, cliente_id, pedido_id, descuento_aplicado)
          VALUES ($1, $2, $3, $4)`,
-        [cupon_id, cliente_id, pedido.id, descuento]
-      );
-      await client.query(
-        `UPDATE cupones SET usos_actuales = usos_actuales + 1 WHERE id = $1`,
-        [cupon_id]
+        [calculo.cupon.id, cliente_id, pedido.id, calculo.descuento_cupon]
       );
     }
 
     await client.query("COMMIT");
+    enTransaccion = false;
 
     // 🤝 Procesar referido (primera compra del amigo)
     procesarReferidoPrimeraCompra({ cliente_id, empresa_id, pedido_id: pedido.id });
@@ -109,9 +140,12 @@ export const crearPedido = async (req, res) => {
       console.error("Error preparando email nuevo pedido:", emailErr);
     }
 
-    res.json({ id: pedido.id, estado: pedido.estado, total: pedido.total });
+    res.json({ id: pedido.id, estado: pedido.estado, total: Number(pedido.total) });
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (enTransaccion) await client.query("ROLLBACK");
+    if (error instanceof ErrorPedido) {
+      return res.status(error.status).json({ error: error.message, ...error.extra });
+    }
     console.error("Error crearPedido:", error);
     res.status(500).json({ error: "Error al crear el pedido" });
   } finally {
@@ -269,6 +303,20 @@ export const actualizarEstadoPedido = async (req, res) => {
     }
 
     await client.query("BEGIN");
+
+    const { rows: [actual] } = await client.query(
+      "SELECT estado FROM pedidos_online WHERE id = $1 AND empresa_id = $2 FOR UPDATE",
+      [id, empresa_id]
+    );
+    if (!actual) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Pedido no encontrado" });
+    }
+    // Un pedido cancelado ya devolvió su stock; reabrirlo o cancelarlo otra vez lo descuadraría
+    if (actual.estado === "cancelado") {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "El pedido ya está cancelado y no se puede modificar" });
+    }
 
     const result = await client.query(
       `UPDATE pedidos_online

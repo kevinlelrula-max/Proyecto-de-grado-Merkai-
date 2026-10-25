@@ -5,6 +5,8 @@ import {
   crearCliente,
   actualizarCliente,
   eliminarCliente,
+  cambiarEstadoCliente,
+  anonimizarCliente,
   registrarClientePublico,
   loginCliente,
   loginGoogleCliente,
@@ -34,6 +36,8 @@ router.post("/login/google", loginGoogleCliente);
 router.get("/:id/vista360", verificarToken, getVista360);
 router.put("/:id",          verificarToken, actualizarCliente);
 router.delete("/:id",       verificarToken, eliminarCliente);
+router.patch("/:id/estado",     verificarToken, cambiarEstadoCliente);
+router.post("/:id/anonimizar",  verificarToken, anonimizarCliente);
 router.get("/perfil",            verificarToken, getPerfilCliente);
 router.put("/perfil",            verificarToken, actualizarPerfilCliente);
 router.put("/perfil/contrasena", verificarToken, cambiarContrasenaCliente);

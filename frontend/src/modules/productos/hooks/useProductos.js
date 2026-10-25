@@ -4,7 +4,8 @@ import {
   getProductos,
   crearProducto,
   actualizarProducto,
-  eliminarProducto
+  eliminarProducto,
+  cambiarEstadoProducto
 } from "../services/productos.api";
 
 export default function useProductos() {
@@ -40,14 +41,28 @@ export default function useProductos() {
     }
   };
 
+  // Devuelve "historial" cuando el producto tiene ventas y no se puede borrar
   const eliminar = async (id) => {
     try {
       await eliminarProducto(id, token);
       await cargarProductos();
       toast.success("Producto eliminado");
       return true;
-    } catch {
-      toast.error("Error al eliminar el producto");
+    } catch (err) {
+      if (err.response?.data?.code === "TIENE_HISTORIAL") return "historial";
+      toast.error(err.response?.data?.error || "Error al eliminar el producto");
+      return false;
+    }
+  };
+
+  const toggleEstado = async (id) => {
+    try {
+      const { activo } = await cambiarEstadoProducto(id, token);
+      await cargarProductos();
+      toast.success(activo ? "Producto activado" : "Producto desactivado: ya no aparece en la tienda ni en el POS");
+      return true;
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Error al cambiar el estado del producto");
       return false;
     }
   };
@@ -56,5 +71,5 @@ export default function useProductos() {
     cargarProductos();
   }, []);
 
-  return { productos, agregar, actualizar, eliminar };
+  return { productos, agregar, actualizar, eliminar, toggleEstado };
 }

@@ -73,12 +73,7 @@ export default function SelectorEmpresa({ empresas, token, rolId = 1, onSelect, 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-10 pt-9 pb-6">
           <div className="flex items-center gap-3">
-            <svg width="34" height="34" viewBox="0 0 36 36" fill="none">
-              <rect width="36" height="36" rx="9" fill="#1e3a5f"/>
-              <path d="M8 18c0-5 4-9 9-9s9 4 9 9-4 9-9 9" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
-              <path d="M26 18h6l-3-4 3-4h-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <circle cx="14" cy="15" r="1.5" fill="white"/>
-            </svg>
+            <img src="/logo-merkai-icon.png" alt="Merkai" width="34" height="34" style={{ objectFit: "contain" }} />
             <span className="font-bold text-gray-900 text-lg tracking-tight">Merkai</span>
           </div>
 

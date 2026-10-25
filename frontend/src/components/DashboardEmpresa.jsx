@@ -568,9 +568,7 @@ export default function DashboardEmpresa() {
   if (cargandoPermisos) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 gap-3" style={{ fontFamily: "'Sora', sans-serif" }}>
-        <div className="w-10 h-10 rounded-[10px] bg-gradient-to-br from-[#00C9A7] to-[#0099FF] flex items-center justify-center">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l4-4 4 4 4-4 4 4"/><path d="M3 15l4 4 4-4 4 4 4-4"/></svg>
-        </div>
+        <img src="/logo-merkai-icon.png" alt="Merkai" width="40" height="40" style={{ objectFit: "contain" }} />
         <div className="text-sm text-slate-500">Cargando permisos...</div>
       </div>
     );
@@ -621,9 +619,7 @@ export default function DashboardEmpresa() {
                 className="w-9 h-9 rounded-[10px] object-contain bg-white p-0.5 flex-shrink-0"
               />
             ) : (
-              <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-[#00C9A7] to-[#0099FF] flex items-center justify-center flex-shrink-0">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l4-4 4 4 4-4 4 4"/><path d="M3 15l4 4 4-4 4 4 4-4"/></svg>
-              </div>
+              <img src="/logo-merkai-icon.png" alt="Merkai" width="36" height="36" className="flex-shrink-0" style={{ objectFit: "contain" }} />
             )}
             <div>
               <div className="text-[15px] font-semibold text-[#E8F4FF] tracking-tight leading-snug">{nombreEmpresa}</div>
@@ -745,7 +741,7 @@ export default function DashboardEmpresa() {
             </button>
             <div>
               <div className="text-[15px] font-semibold text-[#0B1628] tracking-tight leading-tight">
-                {menu.find(m => m.key === seccion)?.label || seccion}
+                {menu.find(m => m.key === seccion)?.label || { configuracion: "Configuración" }[seccion] || seccion}
               </div>
               <div className="text-[11px] text-slate-400 leading-tight hidden sm:block">{nombreEmpresa}</div>
             </div>

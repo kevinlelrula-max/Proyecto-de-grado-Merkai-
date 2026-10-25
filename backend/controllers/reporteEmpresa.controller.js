@@ -424,6 +424,7 @@ export const getResumenInicio = async (req, res) => {
       `SELECT COUNT(*) AS total
        FROM productos
        WHERE empresa_id = $1
+       AND activo
        AND stock_minimo IS NOT NULL
        AND stock <= stock_minimo`,
       [empresa_id]
@@ -460,6 +461,7 @@ export const getResumenInicio = async (req, res) => {
       `SELECT nombre, stock, stock_minimo
        FROM productos
        WHERE empresa_id = $1
+       AND activo
        AND stock_minimo IS NOT NULL
        AND stock <= stock_minimo
        ORDER BY stock ASC
@@ -497,6 +499,7 @@ export const getResumenInicio = async (req, res) => {
          GROUP BY producto_id
        ) v30 ON v30.producto_id = p.id
        WHERE p.empresa_id = $1
+         AND p.activo
          AND p.stock_minimo IS NOT NULL
          AND p.stock <= p.stock_minimo
        ORDER BY p.stock ASC
@@ -532,6 +535,7 @@ export const getResumenInicio = async (req, res) => {
          GROUP BY producto_id
        ) v30 ON v30.producto_id = p.id
        WHERE p.empresa_id = $1
+         AND p.activo
          AND ROUND((p.stock / NULLIF(v30.total_vendido / 30.0, 0))::numeric, 1) < 30
        ORDER BY ROUND((p.stock / NULLIF(v30.total_vendido / 30.0, 0))::numeric, 1) ASC
        LIMIT 10`,
@@ -932,6 +936,7 @@ export const getPredictorAvanzado = async (req, res) => {
        LEFT JOIN v7  ON v7.producto_id  = p.id
        LEFT JOIN v7p ON v7p.producto_id = p.id
        WHERE p.empresa_id = $1
+         AND p.activo
          AND (
            (v30.total > 0
             AND (p.stock / NULLIF(v30.total / 30.0, 0)) < 30)

@@ -32,7 +32,14 @@ export default function Carrito({
   onPagoExitoso,
 }) {
   const [costoEnvio, setCostoEnvio] = useState(0);
-  const handleCostoEnvio = useCallback((costo) => setCostoEnvio(costo), []);
+  const [departamentoId, setDepartamentoId] = useState(null);
+  const [requiereDepartamento, setRequiereDepartamento] = useState(false);
+  const handleCostoEnvio = useCallback((costo, depId, requiere) => {
+    setCostoEnvio(costo);
+    setDepartamentoId(depId ?? null);
+    setRequiereDepartamento(!!requiere);
+  }, []);
+  const faltaDepartamento = requiereDepartamento && !departamentoId;
 
   // Descuento de referido
   const [descuentoReferido, setDescuentoReferido] = useState(null);
@@ -98,6 +105,7 @@ export default function Carrito({
     clientSecret,
     loadingIntent,
     errorCheckout,
+    montoPedido,
     tienePasarela,
     abrirCheckout,
     cerrarCheckout,
@@ -109,7 +117,7 @@ export default function Carrito({
     notas,
     metodoPagoId,
     cuponId:         cuponAplicado?.cupon_id  || null,
-    descuentoCupon:  descuentoCupon + descuentoRefMonto,
+    departamentoId,
     onPedidoCreado,
   });
 
@@ -137,7 +145,7 @@ export default function Carrito({
 
   const handleConfirmarPedido = () => {
     setMetodoConfirmado(metodoSeleccionado?.metodo?.toLowerCase());
-    confirmarPedido(totalConEnvio, cuponAplicado?.cupon_id || null, descuentoCupon + descuentoRefMonto);
+    confirmarPedido(totalConEnvio, cuponAplicado?.cupon_id || null, departamentoId);
   };
 
   if (!carritoAbierto) return null;
@@ -357,19 +365,23 @@ export default function Carrito({
                   <div style={s.errorBox}>{errorPedido}</div>
                 )}
 
+                {faltaDepartamento && (
+                  <div style={s.errorBox}>Elige tu departamento de envío para continuar.</div>
+                )}
+
                 {usarStripe ? (
                   <button
                     style={{ ...s.btnConfirmar, background: "#3674B5" }}
                     onClick={abrirCheckout}
-                    disabled={!direccion.trim() || loadingIntent}
+                    disabled={!direccion.trim() || loadingIntent || faltaDepartamento}
                   >
                     {loadingIntent ? "Iniciando pago..." : `Ir a pagar · $${totalConEnvio.toLocaleString("es-CO")}`}
                   </button>
                 ) : (
                   <button
-                    style={{ ...s.btnConfirmar, opacity: loadingPedido ? 0.75 : 1, cursor: loadingPedido ? "not-allowed" : "pointer" }}
+                    style={{ ...s.btnConfirmar, opacity: loadingPedido || faltaDepartamento ? 0.6 : 1, cursor: loadingPedido || faltaDepartamento ? "not-allowed" : "pointer" }}
                     onClick={handleConfirmarPedido}
-                    disabled={loadingPedido}
+                    disabled={loadingPedido || faltaDepartamento}
                   >
                     {loadingPedido
                       ? "Enviando pedido..."
@@ -397,7 +409,7 @@ export default function Carrito({
         clientSecret={clientSecret}
         loadingIntent={loadingIntent}
         errorCheckout={errorCheckout}
-        totalPrecio={totalConEnvio}
+        totalPrecio={montoPedido ?? totalConEnvio}
         carrito={carrito}
         empresaNombre={empresaNombre}
         onPagoExitoso={onPagoExitoso}

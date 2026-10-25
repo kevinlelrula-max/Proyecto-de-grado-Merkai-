@@ -69,7 +69,7 @@ app.use(express.urlencoded({ extended: false }));
 // 🔹 TEST API
 // =========================
 app.get("/", (req, res) => {
-  res.send("API Fishware funcionando 🚀");
+  res.send("API Merkai funcionando 🚀");
 });
 
 // OAuth 2.0 metadata — requerido por Claude.ai para descubrir los endpoints

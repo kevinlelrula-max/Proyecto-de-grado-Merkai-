@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import ModalPlantillas from "./ModalPlantillas";
 import ModalDisenoIA from "./ModalDisenoIA";
+import IconoChispas from "./IconoChispas";
 import { imgUrl } from "../../../utils/imgUrl";
 
 const TIPOS_INFO = {
@@ -97,7 +98,7 @@ export default function PanelEditor({
       {/* IA + Plantillas */}
       <div style={{ padding: "10px 14px 6px", display: "flex", flexDirection: "column", gap: 8 }}>
         <button style={s.btnDisenoIA} onClick={() => setShowDisenoIA(true)}>
-          <span style={{ fontSize: 14 }}>✦</span>
+          <IconoChispas size={16} />
           Diseñar con IA
         </button>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>

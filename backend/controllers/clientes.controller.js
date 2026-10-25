@@ -204,9 +204,12 @@ export const getClientes = async (req, res) => {
     const empresa_id = req.user.empresa_id;
 
     const result = await pool.query(
-      `SELECT id, nombre, apellido, usuario, telefono, direccion, numero_documento
-       FROM persona 
-       WHERE empresa_id = $1 AND rol_id = 4`,
+      `SELECT id, nombre, apellido, usuario, telefono, direccion, numero_documento,
+              COALESCE(activo, true)            AS activo,
+              usuario LIKE '%@anonimo.local'    AS anonimizado
+       FROM persona
+       WHERE empresa_id = $1 AND rol_id = 4
+       ORDER BY COALESCE(activo, true) DESC, nombre`,
       [empresa_id]
     );
 
@@ -225,7 +228,7 @@ export const buscarClientes = async (req, res) => {
     const result = await pool.query(
       `SELECT id, nombre, apellido, numero_documento, telefono
        FROM persona
-       WHERE empresa_id = $1 AND rol_id = 4
+       WHERE empresa_id = $1 AND rol_id = 4 AND activo IS NOT FALSE
          AND (nombre ILIKE $2 OR apellido ILIKE $2 OR numero_documento ILIKE $2)
        ORDER BY nombre
        LIMIT 10`,
@@ -314,33 +317,100 @@ export const actualizarCliente = async (req, res) => {
   }
 };
 
-// ✅ Eliminación segura — verifica primero si tiene ventas asociadas
+// Solo se elimina de verdad un cliente sin historial; con compras se desactiva o anonimiza (como Shopify)
 export const eliminarCliente = async (req, res) => {
   try {
     const { id } = req.params;
     const empresa_id = req.user.empresa_id;
 
-    // Verificar si tiene ventas antes de eliminar
-    const ventas = await pool.query(
-      `SELECT COUNT(*) FROM ventas WHERE cliente_id = $1 AND empresa_id = $2`,
-      [id, empresa_id]
+    const { rows: [historial] } = await pool.query(
+      `SELECT (SELECT COUNT(*) FROM ventas         WHERE cliente_id = $1)::int AS ventas,
+              (SELECT COUNT(*) FROM pedidos_online WHERE cliente_id = $1)::int AS pedidos`,
+      [id]
     );
 
-    if (parseInt(ventas.rows[0].count) > 0) {
-      return res.status(400).json({
-        error: "No se puede eliminar un cliente con ventas registradas"
+    if (historial.ventas > 0 || historial.pedidos > 0) {
+      return res.status(409).json({
+        code: "TIENE_HISTORIAL",
+        error: `El cliente tiene ${historial.ventas} venta(s) y ${historial.pedidos} pedido(s) en línea. ` +
+               "Para conservar el historial, desactívalo o borra sus datos personales.",
       });
     }
 
-    await pool.query(
-      `DELETE FROM persona 
+    const result = await pool.query(
+      `DELETE FROM persona
        WHERE id = $1 AND empresa_id = $2 AND rol_id = 4`,
       [id, empresa_id]
     );
+    if (result.rowCount === 0) return res.status(404).json({ error: "Cliente no encontrado" });
 
     res.json({ message: "Cliente eliminado" });
   } catch (error) {
+    if (error.code === "23503") {
+      return res.status(409).json({
+        code: "TIENE_HISTORIAL",
+        error: "El cliente tiene registros asociados (por ejemplo, referidos). Desactívalo o borra sus datos personales.",
+      });
+    }
+    console.error(error);
     res.status(500).json({ error: "Error al eliminar cliente" });
+  }
+};
+
+export const cambiarEstadoCliente = async (req, res) => {
+  try {
+    const { rows: [cliente] } = await pool.query(
+      `UPDATE persona SET activo = NOT COALESCE(activo, true)
+       WHERE id = $1 AND empresa_id = $2 AND rol_id = 4
+       RETURNING id, activo`,
+      [req.params.id, req.user.empresa_id]
+    );
+    if (!cliente) return res.status(404).json({ error: "Cliente no encontrado" });
+    res.json(cliente);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al cambiar el estado del cliente" });
+  }
+};
+
+// Derecho de supresión (Ley 1581 de 2012): borra los datos personales y conserva las compras
+export const anonimizarCliente = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const contrasenaInutil = await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 10);
+
+    await client.query("BEGIN");
+    const { rows: [cliente] } = await client.query(
+      `UPDATE persona SET
+         nombre = 'Cliente', apellido = 'eliminado',
+         usuario = 'eliminado_' || id || '@anonimo.local',
+         contrasena = $3,
+         telefono = NULL, direccion = NULL,
+         tipo_documento = NULL, numero_documento = NULL, id_municipio = NULL,
+         reset_token = NULL, reset_token_expiry = NULL,
+         activo = false
+       WHERE id = $1 AND empresa_id = $2 AND rol_id = 4
+       RETURNING id`,
+      [id, req.user.empresa_id, contrasenaInutil]
+    );
+    if (!cliente) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Cliente no encontrado" });
+    }
+    await client.query(
+      `UPDATE pedidos_online SET direccion_entrega = 'Dato eliminado' WHERE cliente_id = $1`, [id]
+    );
+    await client.query(`DELETE FROM carritos WHERE cliente_id = $1`, [id]);
+    await client.query("COMMIT");
+
+    res.json({ message: "Datos personales eliminados" });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ error: "Error al borrar los datos del cliente" });
+  } finally {
+    client.release();
   }
 };
 
@@ -498,7 +568,7 @@ export const loginCliente = async (req, res) => {
     }
 
     const result = await pool.query(
-      `SELECT id, nombre, apellido, usuario, rol_id, contrasena
+      `SELECT id, nombre, apellido, usuario, rol_id, contrasena, activo
        FROM persona WHERE usuario = $1`,
       [usuario]
     );
@@ -517,6 +587,10 @@ export const loginCliente = async (req, res) => {
     const match = await bcrypt.compare(contrasena, user.contrasena);
     if (!match) {
       return res.status(401).json({ error: "Credenciales incorrectas" });
+    }
+
+    if (user.activo === false) {
+      return res.status(403).json({ error: "Esta cuenta está desactivada. Comunícate con la tienda." });
     }
 
     const token = generarToken(user);
@@ -548,13 +622,16 @@ export const loginGoogleCliente = async (req, res) => {
     const { email, given_name, family_name, sub: google_id } = ticket.getPayload();
 
     const existing = await pool.query(
-      "SELECT id, nombre, apellido, usuario, rol_id FROM persona WHERE usuario = $1 AND rol_id = 4",
+      "SELECT id, nombre, apellido, usuario, rol_id, activo FROM persona WHERE usuario = $1 AND rol_id = 4",
       [email]
     );
 
     let user;
     if (existing.rows.length > 0) {
       user = existing.rows[0];
+      if (user.activo === false) {
+        return res.status(403).json({ error: "Esta cuenta está desactivada. Comunícate con la tienda." });
+      }
     } else {
       const randomPass = await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 10);
       const codigoPropio = generarCodigo(given_name || "CLI");

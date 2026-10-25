@@ -1,67 +1,60 @@
-import { Banknote, Building2, Smartphone, CreditCard, DollarSign } from "lucide-react";
+import { Banknote, Building2, Smartphone, CreditCard, DollarSign, Wallet } from "lucide-react";
+import { Tarjeta, Interruptor } from "./ui";
 
 const ICONOS = {
-  efectivo:      { Icon: Banknote,    bg: "bg-emerald-50", text: "text-emerald-700" },
-  transferencia: { Icon: Building2,   bg: "bg-blue-50",    text: "text-blue-700"    },
-  nequi:         { Icon: Smartphone,  bg: "bg-purple-50",  text: "text-purple-700"  },
-  tarjeta:       { Icon: CreditCard,  bg: "bg-amber-50",   text: "text-amber-700"   },
+  efectivo:      { Icon: Banknote,   bg: "bg-emerald-50", text: "text-emerald-700" },
+  transferencia: { Icon: Building2,  bg: "bg-blue-50",    text: "text-blue-700"    },
+  nequi:         { Icon: Smartphone, bg: "bg-purple-50",  text: "text-purple-700"  },
+  tarjeta:       { Icon: CreditCard, bg: "bg-amber-50",   text: "text-amber-700"   },
 };
 
 export default function MetodosPago({ metodos, onToggle }) {
-  return (
-    <div className="bg-white rounded-2xl border-[1.5px] border-slate-300 shadow-[0_2px_8px_rgba(0,0,0,0.08)] p-6">
-      <h3 className="text-base font-semibold text-slate-800 mb-1">
-        Métodos de pago disponibles
-      </h3>
-      <p className="text-sm text-slate-500 mb-5">
-        Activa o desactiva los métodos que acepta esta empresa en el punto de venta
-      </p>
+  const activos = metodos.filter((m) => m.activo).length;
 
+  return (
+    <Tarjeta
+      Icon={Wallet}
+      titulo="Métodos de pago"
+      descripcion="Elige los métodos que acepta tu negocio en el punto de venta y en los pedidos"
+      acciones={
+        <span className="text-xs font-semibold text-slate-700 bg-slate-100 rounded-full px-3 py-1 whitespace-nowrap">
+          {activos} de {metodos.length} activos
+        </span>
+      }
+    >
       <div className="flex flex-col gap-3">
         {metodos.map((metodo) => {
-          const icono = ICONOS[metodo.key] || { Icon: DollarSign, bg: "bg-gray-50", text: "text-gray-700" };
-          const { Icon } = icono;
-
+          const { Icon, bg, text } = ICONOS[metodo.key] || { Icon: DollarSign, bg: "bg-slate-100", text: "text-slate-700" };
           return (
             <div
               key={metodo.key}
-              className="flex items-center justify-between border-2 border-slate-200 rounded-xl px-4 py-4 hover:border-slate-300 transition"
+              className={`flex items-center justify-between gap-4 rounded-xl border px-4 py-3.5 transition ${
+                metodo.activo ? "border-blue-200 bg-blue-50/40" : "border-slate-200 bg-white"
+              }`}
             >
-              {/* Izquierda: icono + info */}
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl ${icono.bg} ${icono.text} flex items-center justify-center`}>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-10 h-10 rounded-xl ${bg} ${text} flex items-center justify-center flex-shrink-0`}>
                   <Icon size={18} />
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-700">{metodo.label}</p>
-                  <p className="text-xs text-gray-400">{metodo.descripcion}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">{metodo.label}</p>
+                  <p className="text-xs text-slate-600">{metodo.descripcion}</p>
                 </div>
               </div>
-
-              {/* Derecha: badge + toggle */}
-              <div className="flex items-center gap-3">
-                <span className={`text-xs font-medium px-2 py-1 rounded-full ${
-                  metodo.activo ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-400"
-                }`}>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <span className={`hidden sm:inline text-xs font-semibold ${metodo.activo ? "text-emerald-700" : "text-slate-500"}`}>
                   {metodo.activo ? "Activo" : "Inactivo"}
                 </span>
-
-                <button
-                  onClick={() => onToggle(metodo.key)}
-                  className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none ${
-                    metodo.activo ? "bg-blue-500" : "bg-gray-200"
-                  }`}
-                  aria-label={`${metodo.activo ? "Desactivar" : "Activar"} ${metodo.label}`}
-                >
-                  <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
-                    metodo.activo ? "translate-x-5" : "translate-x-0"
-                  }`} />
-                </button>
+                <Interruptor activo={metodo.activo} onChange={() => onToggle(metodo.key)} etiqueta={`${metodo.activo ? "Desactivar" : "Activar"} ${metodo.label}`} />
               </div>
             </div>
           );
         })}
       </div>
-    </div>
+
+      <p className="text-xs text-slate-500 mt-4">
+        Para cobrar con tarjeta en la tienda en línea, conecta una pasarela de pago en la sección <strong className="text-slate-700">Integraciones</strong> del menú.
+      </p>
+    </Tarjeta>
   );
 }

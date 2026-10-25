@@ -4,6 +4,7 @@ import {
   crearProducto,
   actualizarProducto,
   eliminarProducto,
+  toggleProducto,
   eliminarImagenProducto,
   upload,
   getProductosPorEmpresaPublico,
@@ -36,6 +37,7 @@ router.get("/",                          verificarToken, getProductos);
 router.post("/",                         verificarToken, upload.array("imagenes", 8), crearProducto);
 router.put("/:id",                       verificarToken, upload.array("imagenes", 8), actualizarProducto);
 router.delete("/:id",                    verificarToken, eliminarProducto);
+router.patch("/:id/estado",               verificarToken, toggleProducto);
 router.delete("/:id/imagen/:imgId",      verificarToken, eliminarImagenProducto);
 
 // Niveles de lealtad

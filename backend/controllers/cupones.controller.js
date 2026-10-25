@@ -1,22 +1,6 @@
 import pool from "../config/db.js";
+import { calcularDescuento } from "../utils/calcularPedido.js";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function calcularDescuento(cupon, subtotal, costoEnvio = 0) {
-  if (cupon.tipo === "porcentaje") {
-    let desc = subtotal * (parseFloat(cupon.valor) / 100);
-    if (cupon.maximo_descuento) desc = Math.min(desc, parseFloat(cupon.maximo_descuento));
-    return Math.round(desc);
-  }
-  if (cupon.tipo === "valor_fijo") {
-    return Math.min(parseFloat(cupon.valor), subtotal);
-  }
-  if (cupon.tipo === "envio_gratis") {
-    return costoEnvio;
-  }
-  return 0;
-}
-   
 // ── GET /api/cupones ──────────────────────────────────────────────────────────
 export const getCupones = async (req, res) => {
   try {
@@ -197,6 +181,19 @@ export const eliminarCupon = async (req, res) => {
     const empresa_id = req.user.empresa_id;
     const { id }     = req.params;
 
+    // Un cupón usado queda en el historial de pedidos y descuentos; se desactiva en vez de borrarse
+    const { rows: [usos] } = await pool.query(
+      `SELECT (SELECT COUNT(*) FROM cupones_usos   WHERE cupon_id = $1)
+            + (SELECT COUNT(*) FROM pedidos_online WHERE cupon_id = $1) AS total`,
+      [id]
+    );
+    if (Number(usos.total) > 0) {
+      return res.status(409).json({
+        code: "TIENE_HISTORIAL",
+        error: "Este cupón ya se usó en pedidos. Desactívalo para que no se pueda volver a usar.",
+      });
+    }
+
     const result = await pool.query(
       `DELETE FROM cupones WHERE id = $1 AND empresa_id = $2 RETURNING id`,
       [id, empresa_id]
@@ -208,6 +205,12 @@ export const eliminarCupon = async (req, res) => {
 
     res.json({ ok: true });
   } catch (error) {
+    if (error.code === "23503") {
+      return res.status(409).json({
+        code: "TIENE_HISTORIAL",
+        error: "Este cupón tiene registros asociados. Desactívalo en su lugar.",
+      });
+    }
     console.error("Error eliminarCupon:", error);
     res.status(500).json({ error: "Error al eliminar el cupón" });
   }

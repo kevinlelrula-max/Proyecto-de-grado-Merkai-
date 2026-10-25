@@ -157,9 +157,10 @@ export function useCupones() {
       setExito("Cupón eliminado");
       setTimeout(() => setExito(""), 3000);
       toast.success("Cupón eliminado");
-    } catch {
-      setError("Error al eliminar el cupón");
-      toast.error("Error al eliminar el cupón");
+    } catch (err) {
+      const msg = err.response?.data?.error || "Error al eliminar el cupón";
+      setError(msg);
+      toast.error(msg);
     }
   };
 

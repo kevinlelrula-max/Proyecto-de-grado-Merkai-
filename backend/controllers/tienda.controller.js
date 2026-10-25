@@ -73,6 +73,7 @@ export const getProductosPublicos = async (req, res) => {
        FROM productos p
        LEFT JOIN categoria c ON c.id = p.categoria_id
        WHERE p.empresa_id = $1
+         AND p.activo
          AND p.stock > 0
        ORDER BY c.nombre ASC, p.nombre ASC`,
       [id]

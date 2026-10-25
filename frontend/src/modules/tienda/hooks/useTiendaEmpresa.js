@@ -208,7 +208,7 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
   const totalPrecio = carrito.reduce((acc, item) => acc + item.cantidad * item.precio, 0);
 
   // ── PEDIDO: confirmar
-  const confirmarPedido = useCallback(async (totalFinal = totalPrecio, cuponId = null, descuentoCupon = 0) => {
+  const confirmarPedido = useCallback(async (totalFinal = totalPrecio, cuponId = null, departamentoId = null) => {
     const clienteToken = localStorage.getItem("cliente_token");
     const clienteId    = localStorage.getItem("cliente_id");
 
@@ -232,17 +232,15 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
     try {
       const payload = {
         empresa_id:        empresaId,
-        cliente_id:        Number(clienteId),
         metodo_pago_id:    metodoPagoId,
         direccion_entrega: direccion.trim(),
         notas:             notas.trim() || null,
         total:             totalFinal,
-        cupon_id:          cuponId        || null,
-        descuento:         descuentoCupon || 0,
+        cupon_id:          cuponId || null,
+        departamento_id:   departamentoId,
         detalle: carrito.map((item) => ({
           producto_id:     item.id,
           cantidad:        item.cantidad,
-          precio_unitario: item.precio,
         })),
       };
 
@@ -250,7 +248,7 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
 
       if (res.id) {
         localStorage.setItem("cliente_direccion", direccion);
-        setPedidoExitoso({ id: res.id, total: totalFinal });
+        setPedidoExitoso({ id: res.id, total: res.total ?? totalFinal });
         vaciarCarrito();
         setCarritoAbierto(false);
         // Marcar carrito como convertido

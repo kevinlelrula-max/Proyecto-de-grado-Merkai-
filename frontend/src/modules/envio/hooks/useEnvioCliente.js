@@ -38,7 +38,13 @@ export function useEnvioCliente(empresa_id) {
     .filter(([, costo]) => Number(costo) === 0)
     .map(([id]) => Number(id));
 
+  // Solo se exige elegir departamento si la tienda configuró costos de envío
+  const requiereDepartamento =
+    (config?.costo_defecto ?? 0) > 0 ||
+    Object.keys(config?.costos_departamentos || {}).length > 0;
+
   return {
+    requiereDepartamento,
     costoEnvio:              config?.costo_defecto ?? 0,
     departamentos,
     depSeleccionado,

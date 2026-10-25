@@ -33,7 +33,7 @@ export function registerResumenTools(server, pool, empresa_id) {
         pool.query(
           `SELECT COUNT(*) AS total
            FROM productos
-           WHERE empresa_id = $1 AND stock_minimo IS NOT NULL AND stock <= stock_minimo`,
+           WHERE empresa_id = $1 AND activo AND stock_minimo IS NOT NULL AND stock <= stock_minimo`,
           [empresa_id]
         ),
       ]);

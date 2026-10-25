@@ -1,7 +1,68 @@
 import { useState } from "react";
 
-export default function TablaClientes({ clientes, onEditar, onEliminar, onVerPerfil, onAgregar }) {
-  const [pendingDeleteId, setPendingDeleteId] = useState(null);
+export default function TablaClientes({ clientes, onEditar, onEliminar, onToggleEstado, onBorrarDatos, onVerPerfil, onAgregar }) {
+  // { id, paso: "eliminar" | "historial" | "anonimizar" }
+  const [pendiente, setPendiente] = useState(null);
+  const cerrar = () => setPendiente(null);
+
+  const confirmarEliminar = async (id) => {
+    const resultado = await onEliminar(id);
+    setPendiente(resultado === "historial" ? { id, paso: "historial" } : null);
+  };
+
+  const renderAcciones = (c) => {
+    const paso = pendiente?.id === c.id ? pendiente.paso : null;
+
+    if (paso === "eliminar") return (
+      <>
+        <span style={s.confirmText}>¿Eliminar?</span>
+        <button style={s.btnConfirmYes} onClick={() => confirmarEliminar(c.id)}>Sí</button>
+        <button style={s.btnConfirmNo} onClick={cerrar}>No</button>
+      </>
+    );
+
+    if (paso === "historial") return (
+      <div style={s.historialBox}>
+        <span style={s.historialText}>
+          {c.anonimizado
+            ? "Tiene compras registradas: se conserva sin datos personales."
+            : "Tiene compras registradas, no se puede eliminar."}
+        </span>
+        <div style={s.actions}>
+          {!c.anonimizado && c.activo && (
+            <button style={s.warnBtn} onClick={() => { onToggleEstado(c.id); cerrar(); }}>Desactivar</button>
+          )}
+          {!c.anonimizado && (
+            <button style={s.deleteBtn} onClick={() => setPendiente({ id: c.id, paso: "anonimizar" })}>Borrar datos personales</button>
+          )}
+          <button style={s.btnConfirmNo} onClick={cerrar}>{c.anonimizado ? "Cerrar" : "Cancelar"}</button>
+        </div>
+      </div>
+    );
+
+    if (paso === "anonimizar") return (
+      <div style={s.historialBox}>
+        <span style={s.historialText}>Se borran nombre, documento, teléfono, correo y dirección. Las compras se conservan. No se puede deshacer.</span>
+        <div style={s.actions}>
+          <button style={s.btnConfirmYes} onClick={() => { onBorrarDatos(c.id); cerrar(); }}>Borrar datos</button>
+          <button style={s.btnConfirmNo} onClick={cerrar}>Cancelar</button>
+        </div>
+      </div>
+    );
+
+    return (
+      <>
+        <button style={s.perfilBtn} onClick={() => onVerPerfil(c.id)}>👁 Vista 360</button>
+        {!c.anonimizado && <button style={s.editBtn} onClick={() => onEditar(c)}>✏️ Editar</button>}
+        {!c.anonimizado && (
+          <button style={c.activo ? s.warnBtn : s.editBtn} onClick={() => onToggleEstado(c.id)}>
+            {c.activo ? "Desactivar" : "Activar"}
+          </button>
+        )}
+        <button style={s.deleteBtn} onClick={() => setPendiente({ id: c.id, paso: "eliminar" })}>🗑️ Eliminar</button>
+      </>
+    );
+  };
 
   if (clientes.length === 0) {
     return (
@@ -30,7 +91,7 @@ export default function TablaClientes({ clientes, onEditar, onEliminar, onVerPer
         </thead>
         <tbody>
           {clientes.map((c) => (
-            <tr key={c.id} style={s.row}>
+            <tr key={c.id} style={{ ...s.row, ...(c.activo ? {} : s.rowInactiva) }}>
               <td style={s.td}>
                 <div style={s.clienteInfo}>
                   <div style={s.avatar}>
@@ -38,6 +99,9 @@ export default function TablaClientes({ clientes, onEditar, onEliminar, onVerPer
                   </div>
                   <div>
                     <div style={s.nombre}>{c.nombre} {c.apellido}</div>
+                    {!c.activo && (
+                      <span style={s.badge}>{c.anonimizado ? "Datos borrados" : "Desactivado"}</span>
+                    )}
                   </div>
                 </div>
               </td>
@@ -48,21 +112,7 @@ export default function TablaClientes({ clientes, onEditar, onEliminar, onVerPer
                 <span style={s.telefono}>{c.telefono || "—"}</span>
               </td>
               <td style={{ ...s.td, textAlign: "center" }}>
-                <div style={s.actions}>
-                  {pendingDeleteId === c.id ? (
-                    <>
-                      <span style={s.confirmText}>¿Eliminar?</span>
-                      <button style={s.btnConfirmYes} onClick={() => { onEliminar(c.id); setPendingDeleteId(null); }}>Sí</button>
-                      <button style={s.btnConfirmNo} onClick={() => setPendingDeleteId(null)}>No</button>
-                    </>
-                  ) : (
-                    <>
-                      <button style={s.perfilBtn} onClick={() => onVerPerfil(c.id)}>👁 Vista 360</button>
-                      <button style={s.editBtn} onClick={() => onEditar(c)}>✏️ Editar</button>
-                      <button style={s.deleteBtn} onClick={() => setPendingDeleteId(c.id)}>🗑️ Eliminar</button>
-                    </>
-                  )}
-                </div>
+                <div style={s.actions}>{renderAcciones(c)}</div>
               </td>
             </tr>
           ))}
@@ -88,6 +138,19 @@ const s = {
     backgroundColor: "#f8fafc", borderBottom: "1.5px solid #e2e8f0",
   },
   row: { borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" },
+  rowInactiva: { backgroundColor: "#f8fafc", opacity: 0.7 },
+  badge: {
+    display: "inline-block", marginTop: "3px", padding: "1px 8px",
+    fontSize: "11px", fontWeight: "600", borderRadius: "999px",
+    backgroundColor: "#e2e8f0", color: "#475569",
+  },
+  warnBtn: {
+    padding: "6px 12px", fontSize: "12px", fontWeight: "600",
+    border: "1.5px solid #f59e0b", borderRadius: "8px",
+    backgroundColor: "transparent", color: "#b45309", cursor: "pointer",
+  },
+  historialBox: { display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", maxWidth: "360px" },
+  historialText: { fontSize: "12px", color: "#475569", lineHeight: 1.4 },
   td: { padding: "15px 16px", fontSize: "14px", color: "#0f172a" },
 
   clienteInfo: { display: "flex", alignItems: "center", gap: "12px" },

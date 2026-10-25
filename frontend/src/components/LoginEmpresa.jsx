@@ -110,12 +110,7 @@ export default function LoginEmpresa() {
 
         {/* Logo — top left */}
         <div className="absolute top-8 left-10 flex items-center gap-2.5 z-30">
-          <svg width="32" height="32" viewBox="0 0 36 36" fill="none">
-            <rect width="36" height="36" rx="9" fill="white" fillOpacity="0.15"/>
-            <path d="M8 18c0-5 4-9 9-9s9 4 9 9-4 9-9 9" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
-            <path d="M26 18h6l-3-4 3-4h-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            <circle cx="14" cy="15" r="1.5" fill="white"/>
-          </svg>
+          <img src="/logo-merkai-icon.png" alt="Merkai" width="32" height="32" style={{ objectFit: "contain" }} />
           <span className="font-bold text-white text-base tracking-tight">Merkai</span>
         </div>
 
