@@ -17,61 +17,99 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 function loginPage(params, error = null) {
-  const safe = (v) => String(v || "").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  const safe = (v) =>
+    String(v || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Merkai — Autorizar acceso</title>
+  <title>Merkai — Conectar con Claude</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#080f1e;color:#cbd5e1;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
-    .card{background:#0e1929;border:1px solid rgba(255,255,255,0.07);border-radius:12px;width:100%;max-width:380px;overflow:hidden}
-    .head{padding:24px 24px 20px;border-bottom:1px solid rgba(255,255,255,0.07);text-align:center}
-    .logo{font-size:18px;font-weight:800;color:white;margin-bottom:6px}
-    .logo span{color:#00C9A7}
-    .subtitle{font-size:12px;color:#4e6280;line-height:1.5}
-    .body{padding:24px}
-    label{display:block;font-size:11px;font-weight:700;color:#4e6280;margin-bottom:7px;letter-spacing:.05em;text-transform:uppercase}
-    input[type=email],input[type=password]{width:100%;padding:11px 13px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:7px;font-size:14px;color:white;outline:none;margin-bottom:16px;transition:border-color .15s}
-    input:focus{border-color:#00C9A7}
-    .btn{width:100%;padding:12px;background:white;color:#080f1e;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;margin-top:4px;transition:background .15s}
-    .btn:hover{background:#e2e8f0}
-    .error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:#f87171;padding:10px 14px;border-radius:7px;font-size:13px;margin-bottom:16px}
-    .note{font-size:11px;color:#334155;text-align:center;margin-top:16px}
-    .scope-box{background:rgba(0,201,167,0.05);border:1px solid rgba(0,201,167,0.15);border-radius:7px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#64748b;line-height:1.6}
-    .scope-box b{color:#00C9A7}
+    body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:radial-gradient(900px 500px at 50% -10%,rgba(0,201,167,0.14),transparent 60%),#080f1e;color:#cbd5e1;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+    .card{background:#0e1929;border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.45)}
+    .head{padding:28px 28px 22px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.07)}
+    .link{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:18px}
+    .badge{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800}
+    .badge.merkai{background:linear-gradient(135deg,#00C9A7,#0a8f7a);color:#06241f}
+    .badge.claude{background:#d97757;color:#fff}
+    .dots{color:#334155;letter-spacing:3px;font-size:18px}
+    h1{font-size:19px;font-weight:700;color:#fff;margin-bottom:6px}
+    .subtitle{font-size:13px;color:#7b8ba3;line-height:1.55}
+    .subtitle b{color:#cbd5e1}
+    .body{padding:24px 28px 26px}
+    .perms{list-style:none;background:rgba(0,201,167,0.05);border:1px solid rgba(0,201,167,0.16);border-radius:10px;padding:14px 16px;margin-bottom:20px}
+    .perms-title{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#00C9A7;margin-bottom:10px}
+    .perms li{display:flex;gap:10px;align-items:flex-start;font-size:13px;color:#aab7c8;line-height:1.45;padding:4px 0}
+    .perms li svg{flex:none;margin-top:2px}
+    .perms .no{color:#7b8ba3;border-top:1px solid rgba(255,255,255,0.06);margin-top:6px;padding-top:10px}
+    label{display:block;font-size:11px;font-weight:700;color:#7b8ba3;margin-bottom:7px;letter-spacing:.05em;text-transform:uppercase}
+    .field{position:relative;margin-bottom:16px}
+    input[type=text],input[type=password]{width:100%;padding:12px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:9px;font-size:14px;color:#fff;outline:none;transition:border-color .15s,box-shadow .15s}
+    input::placeholder{color:#475569}
+    input:focus{border-color:#00C9A7;box-shadow:0 0 0 3px rgba(0,201,167,0.18)}
+    .field input.pw{padding-right:76px}
+    .toggle{position:absolute;right:8px;bottom:6px;background:none;border:none;color:#7b8ba3;font-size:12px;font-weight:600;cursor:pointer;padding:6px 8px;border-radius:6px}
+    .toggle:hover{color:#fff;background:rgba(255,255,255,0.06)}
+    .btn{width:100%;padding:13px;background:#00C9A7;color:#06241f;border:none;border-radius:9px;font-size:14.5px;font-weight:700;cursor:pointer;margin-top:4px;transition:filter .15s,transform .05s}
+    .btn:hover{filter:brightness(1.08)}
+    .btn:active{transform:translateY(1px)}
+    .btn[disabled]{opacity:.7;cursor:wait}
+    .error{display:flex;gap:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.28);color:#fca5a5;padding:11px 14px;border-radius:9px;font-size:13px;margin-bottom:18px;line-height:1.45}
+    .note{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11.5px;color:#64748b;text-align:center;margin-top:18px;line-height:1.5}
+    @media (max-width:420px){.head{padding:22px 20px 18px}.body{padding:20px}}
   </style>
 </head>
 <body>
-  <div class="card">
+  <main class="card">
     <div class="head">
-      <div class="logo">Merkai <span>MCP</span></div>
-      <div class="subtitle">Claude AI solicita acceso a tus datos de negocio</div>
+      <div class="link" aria-hidden="true">
+        <div class="badge merkai">M</div>
+        <div class="dots">• • •</div>
+        <div class="badge claude">✳</div>
+      </div>
+      <h1>Conecta Merkai con Claude</h1>
+      <p class="subtitle"><b>Claude</b> solicita acceso para responder preguntas sobre tu negocio. Inicia sesión con tu cuenta de Merkai para autorizarlo.</p>
     </div>
     <div class="body">
-      <div class="scope-box">
-        <b>Acceso solicitado:</b><br/>
-        Ventas · Inventario · Clientes<br/>
-        <span style="color:#1e3a5f">Solo lectura — tus datos no se modifican</span>
-      </div>
-      ${error ? `<div class="error">⚠ ${error}</div>` : ""}
-      <form method="POST" action="/oauth/authorize">
+      <ul class="perms" aria-label="Permisos solicitados">
+        <div class="perms-title">Claude podrá consultar</div>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00C9A7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Ventas, comparativas y productos más vendidos</li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00C9A7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Inventario y stock crítico</li>
+        <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00C9A7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Pedidos pendientes y clientes frecuentes</li>
+        <li class="no"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7b8ba3" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>Solo lectura: no puede modificar, borrar ni cobrar nada</li>
+      </ul>
+      ${error ? `<div class="error" role="alert"><span>⚠</span><span>${error}</span></div>` : ""}
+      <form method="POST" action="/oauth/authorize" id="f">
         <input type="hidden" name="redirect_uri" value="${safe(params.redirect_uri)}"/>
         <input type="hidden" name="state" value="${safe(params.state)}"/>
         <input type="hidden" name="code_challenge" value="${safe(params.code_challenge)}"/>
         <input type="hidden" name="code_challenge_method" value="${safe(params.code_challenge_method)}"/>
         <input type="hidden" name="client_id" value="${safe(params.client_id)}"/>
-        <label>Email</label>
-        <input type="email" name="usuario" placeholder="tu@email.com" required autocomplete="email"/>
-        <label>Contraseña</label>
-        <input type="password" name="contrasena" placeholder="••••••••" required autocomplete="current-password"/>
-        <button type="submit" class="btn">Autorizar acceso →</button>
+        <div class="field">
+          <label for="usuario">Usuario de Merkai</label>
+          <input type="text" id="usuario" name="usuario" placeholder="Tu usuario o correo de Merkai" required autocomplete="username" autocapitalize="none" spellcheck="false" autofocus/>
+        </div>
+        <div class="field">
+          <label for="contrasena">Contraseña</label>
+          <input type="password" id="contrasena" name="contrasena" class="pw" placeholder="Tu contraseña" required autocomplete="current-password"/>
+          <button type="button" class="toggle" id="t" aria-label="Mostrar contraseña">Mostrar</button>
+        </div>
+        <button type="submit" class="btn" id="b">Autorizar acceso</button>
       </form>
-      <div class="note">Solo lectura · Acceso revocable en cualquier momento</div>
+      <div class="note">🔒 Puedes revocar este acceso cuando quieras desde Claude</div>
     </div>
-  </div>
+  </main>
+  <script>
+    var p=document.getElementById("contrasena"),t=document.getElementById("t");
+    t.onclick=function(){var s=p.type==="password";p.type=s?"text":"password";t.textContent=s?"Ocultar":"Mostrar";t.setAttribute("aria-label",s?"Ocultar contraseña":"Mostrar contraseña");};
+    document.getElementById("f").onsubmit=function(){var b=document.getElementById("b");b.disabled=true;b.textContent="Verificando…";};
+  </script>
 </body>
 </html>`;
 }
