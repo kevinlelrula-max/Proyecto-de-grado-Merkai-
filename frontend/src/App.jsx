@@ -39,12 +39,14 @@ function App() {
         {/* ── Empresas ── */}
         <Route path="/empresa/registro" element={<RegistroEmpresa />} />
         <Route path="/empresa/login"    element={<LoginEmpresa />} />
+        <Route path="/empresa/recuperar-contrasena" element={<RecuperarContrasena tipo="empresa" />} />
+        <Route path="/empresa/resetear-contrasena"  element={<ResetearContrasena tipo="empresa" />} />
 
         {/* ── Dashboard empresa (requiere sesión) ── */}
         <Route path="/dashboard" element={<ProtectedRoute><DashboardEmpresa /></ProtectedRoute>} />
         <Route path="/perfil"    element={<ProtectedRoute><Perfil /></ProtectedRoute>} />
-        <Route path="/ventas"    element={<ProtectedRoute><Ventas /></ProtectedRoute>} />
-        <Route path="/reportes"  element={<ProtectedRoute><Reportes /></ProtectedRoute>} />
+        <Route path="/ventas"    element={<ProtectedRoute seccion="ventas"><Ventas /></ProtectedRoute>} />
+        <Route path="/reportes"  element={<ProtectedRoute seccion="reportes"><Reportes /></ProtectedRoute>} />
 
         {/* ── Tienda online del cliente ── */}
         <Route path="/tienda/login"                element={<LoginCliente />} />

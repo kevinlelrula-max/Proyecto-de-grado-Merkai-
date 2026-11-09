@@ -1,6 +1,8 @@
 import pool from "../config/db.js";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { generarToken } from "../utils/jwt.js";
+import { enviarEmailRecuperacion } from "../utils/email.js";
 import { OAuth2Client } from "google-auth-library";
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -173,5 +175,35 @@ export const seleccionarEmpresa = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Error al seleccionar empresa" });
+  }
+};
+
+// ── POST /api/auth/recuperar-contrasena ──────────────────────────────────────
+// Personal de la empresa (todos los roles menos Cliente). Siempre responde ok para no revelar si la cuenta existe.
+export const solicitarRecuperacionEmpresa = async (req, res) => {
+  try {
+    const usuario = String(req.body?.usuario || "").trim().toLowerCase();
+    if (!usuario) return res.status(400).json({ error: "El correo es obligatorio" });
+
+    const { rows } = await pool.query(
+      "SELECT id, nombre FROM persona WHERE LOWER(usuario) = $1 AND rol_id <> 4 AND activo IS NOT FALSE",
+      [usuario]
+    );
+    if (rows.length === 0) return res.json({ ok: true });
+
+    const token  = crypto.randomBytes(32).toString("hex");
+    const expiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+    await pool.query(
+      "UPDATE persona SET reset_token=$1, reset_token_expiry=$2 WHERE id=$3",
+      [token, expiry, rows[0].id]
+    );
+
+    const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    await enviarEmailRecuperacion(usuario, rows[0].nombre, token, baseUrl, "/empresa/resetear-contrasena");
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("Error solicitarRecuperacionEmpresa:", error);
+    res.status(500).json({ error: "Error al procesar la solicitud" });
   }
 };

@@ -16,7 +16,7 @@ import {
   getNivelCliente,
 } from "../controllers/productos.controller.js";
 
-import { verificarToken } from "../middlewares/auth.middleware.js";
+import { verificarToken, requierePermiso } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -34,11 +34,11 @@ router.get("/lealtad/cliente/:clienteId/empresa/:empresaId", getNivelCliente);
 
 // Productos
 router.get("/",                          verificarToken, getProductos);
-router.post("/",                         verificarToken, upload.array("imagenes", 8), crearProducto);
-router.put("/:id",                       verificarToken, upload.array("imagenes", 8), actualizarProducto);
-router.delete("/:id",                    verificarToken, eliminarProducto);
-router.patch("/:id/estado",               verificarToken, toggleProducto);
-router.delete("/:id/imagen/:imgId",      verificarToken, eliminarImagenProducto);
+router.post("/",                         verificarToken, requierePermiso("productos"), upload.array("imagenes", 8), crearProducto);
+router.put("/:id",                       verificarToken, requierePermiso("productos"), upload.array("imagenes", 8), actualizarProducto);
+router.delete("/:id",                    verificarToken, requierePermiso("productos"), eliminarProducto);
+router.patch("/:id/estado",               verificarToken, requierePermiso("productos"), toggleProducto);
+router.delete("/:id/imagen/:imgId",      verificarToken, requierePermiso("productos"), eliminarImagenProducto);
 
 // Niveles de lealtad
 router.get("/lealtad",          verificarToken, getNivelesLealtad);

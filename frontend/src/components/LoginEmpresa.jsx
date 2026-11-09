@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { loginEmpresa, loginGoogleEmpresa } from "../services/api";
 import SelectorEmpresa from "./SelectorEmpresa";
@@ -206,6 +206,12 @@ export default function LoginEmpresa() {
                 {showPass ? "🙈" : "👁️"}
               </button>
             </div>
+          </div>
+
+          <div className="-mt-5 mb-6 text-right">
+            <Link to="/empresa/recuperar-contrasena" className="text-sm font-medium text-slate-500 hover:text-slate-900 hover:underline transition-colors">
+              ¿Olvidaste tu contraseña?
+            </Link>
           </div>
 
           {/* Botón principal */}

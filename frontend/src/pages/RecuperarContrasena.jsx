@@ -1,121 +1,123 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
+import { Mail, AlertCircle, Loader2, ArrowLeft, MailCheck } from "lucide-react";
+import AuthSplit from "../components/AuthSplit";
+import { AUTH_TIPOS } from "../components/authTipos";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const ESPERA_REENVIO = 60; // segundos antes de poder pedir otro enlace
 
-export default function RecuperarContrasena() {
-  const [usuario,  setUsuario]  = useState("");
-  const [enviado,  setEnviado]  = useState(false);
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState("");
+// tipo: "cliente" (tienda) | "empresa" (panel de gestión)
+export default function RecuperarContrasena({ tipo = "cliente" }) {
+  const t = AUTH_TIPOS[tipo];
+  const [usuario, setUsuario] = useState("");
+  const [enviado, setEnviado] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+  const [espera,  setEspera]  = useState(0);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!usuario.trim()) return setError("Ingresa tu correo electrónico");
+  useEffect(() => {
+    if (espera <= 0) return;
+    const id = setTimeout(() => setEspera((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [espera]);
+
+  const enviar = async () => {
+    const correo = usuario.trim();
+    if (!correo) return setError("Ingresa tu correo electrónico");
+    if (!/^\S+@\S+\.\S+$/.test(correo)) return setError("Revisa que el correo esté bien escrito");
     setLoading(true);
     setError("");
     try {
-      await axios.post(`${API_URL}/api/clientes/recuperar-contrasena`, { usuario: usuario.trim() });
+      await axios.post(`${API_URL}${t.api}/recuperar-contrasena`, { usuario: correo });
       setEnviado(true);
+      setEspera(ESPERA_REENVIO);
     } catch {
-      setError("Ocurrió un error. Intenta de nuevo.");
+      setError("No pudimos procesar la solicitud. Intenta de nuevo en unos minutos.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div style={s.page}>
-      <div style={s.card}>
-        <div style={s.icon}>🔑</div>
-        <h2 style={s.title}>¿Olvidaste tu contraseña?</h2>
+  const onSubmit = (e) => { e.preventDefault(); enviar(); };
 
-        {enviado ? (
-          <>
-            <div style={s.exitoBox}>
-              ✓ Si el correo está registrado, recibirás un enlace en los próximos minutos.
-            </div>
-            <p style={s.hint}>Revisa también tu carpeta de spam.</p>
-            <Link to="/tienda/login" style={s.link}>Volver al inicio de sesión</Link>
-          </>
-        ) : (
-          <>
-            <p style={s.subtitle}>
-              Ingresa tu correo y te enviaremos un enlace para restablecer tu contraseña.
-            </p>
-            <form onSubmit={handleSubmit} style={s.form}>
-              <div style={s.fieldWrap}>
-                <label style={s.label}>Correo electrónico</label>
-                <input
-                  style={s.input}
-                  type="email"
-                  placeholder="tucorreo@ejemplo.com"
-                  value={usuario}
-                  onChange={(e) => { setUsuario(e.target.value); setError(""); }}
-                  autoFocus
-                />
-              </div>
-              {error && <div style={s.errorBox}>{error}</div>}
-              <button
-                type="submit"
-                style={{ ...s.btn, opacity: loading ? 0.75 : 1 }}
-                disabled={loading}
-              >
-                {loading ? "Enviando..." : "Enviar enlace"}
-              </button>
-            </form>
-            <Link to="/tienda/login" style={s.linkSecundario}>Volver al inicio de sesión</Link>
-          </>
-        )}
-      </div>
-    </div>
+  if (enviado) {
+    return (
+      <AuthSplit
+        tipo={tipo}
+        titulo="Revisa tu correo"
+        subtitulo={<>Si <strong className="text-slate-700">{usuario.trim()}</strong> está registrado, te enviamos un enlace para crear una nueva contraseña.</>}
+      >
+        <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3.5 text-sm mb-5">
+          <MailCheck className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <span className="leading-relaxed">El enlace llega en unos minutos y es válido por <strong>1 hora</strong>. Si no lo ves, revisa la carpeta de spam.</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={enviar}
+          disabled={espera > 0 || loading}
+          className="w-full py-3 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed mb-5"
+        >
+          {loading ? "Enviando..." : espera > 0 ? `Reenviar enlace en ${espera} s` : "Reenviar enlace"}
+        </button>
+
+        <Link to={t.login} className="flex items-center justify-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+          <ArrowLeft className="w-4 h-4" /> Volver al inicio de sesión
+        </Link>
+      </AuthSplit>
+    );
+  }
+
+  return (
+    <AuthSplit
+      tipo={tipo}
+      titulo="¿Olvidaste tu contraseña?"
+      subtitulo="Escribe el correo de tu cuenta y te enviaremos un enlace para crear una nueva."
+    >
+      {error && (
+        <div role="alert" className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm mb-5">
+          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
+        <div>
+          <label htmlFor="correo" className="block text-[13px] font-semibold text-slate-700 mb-1.5">
+            Correo electrónico
+          </label>
+          <div className="relative">
+            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              id="correo"
+              type="email"
+              autoFocus
+              autoComplete="email"
+              placeholder={tipo === "empresa" ? "admin@tuempresa.com" : "tucorreo@gmail.com"}
+              value={usuario}
+              onChange={(e) => { setUsuario(e.target.value); setError(""); }}
+              aria-invalid={!!error}
+              className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 text-sm text-slate-900 bg-white outline-none focus:border-[#3674B5] focus:ring-2 focus:ring-[#3674B5]/15 hover:border-slate-300 transition-all"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          style={{ backgroundColor: t.acento }}
+          className="w-full py-3 rounded-xl text-white text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-70 flex items-center justify-center gap-2 cursor-pointer"
+        >
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {loading ? "Enviando..." : "Enviar enlace"}
+        </button>
+      </form>
+
+      <Link to={t.login} className="flex items-center justify-center gap-2 mt-6 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Volver al inicio de sesión
+      </Link>
+    </AuthSplit>
   );
 }
-
-const s = {
-  page: {
-    minHeight: "100vh", backgroundColor: "#f8fafc",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    padding: "24px", fontFamily: "'Inter', 'Segoe UI', sans-serif",
-  },
-  card: {
-    backgroundColor: "white", borderRadius: "20px",
-    border: "1px solid #e2e8f0", padding: "40px 36px",
-    width: "100%", maxWidth: "400px", textAlign: "center",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
-  },
-  icon:     { fontSize: "40px", marginBottom: "16px" },
-  title:    { fontSize: "22px", fontWeight: "800", color: "#0f172a", marginBottom: "8px" },
-  subtitle: { fontSize: "14px", color: "#64748b", lineHeight: "1.6", marginBottom: "24px" },
-  form:     { display: "flex", flexDirection: "column", gap: "16px", textAlign: "left" },
-  fieldWrap:{ display: "flex", flexDirection: "column", gap: "5px" },
-  label:    { fontSize: "13px", fontWeight: "600", color: "#374151" },
-  input: {
-    padding: "10px 14px", borderRadius: "10px",
-    border: "1.5px solid #e2e8f0", fontSize: "14px",
-    color: "#0f172a", outline: "none",
-  },
-  errorBox: {
-    padding: "10px 14px", backgroundColor: "#fef2f2",
-    border: "1px solid #fecaca", borderRadius: "10px",
-    fontSize: "13px", color: "#b91c1c",
-  },
-  exitoBox: {
-    padding: "14px 16px", backgroundColor: "#f0fdf4",
-    border: "1px solid #bbf7d0", borderRadius: "12px",
-    fontSize: "14px", color: "#0F6E56", fontWeight: "600",
-    marginBottom: "12px", lineHeight: "1.5",
-  },
-  btn: {
-    padding: "12px", backgroundColor: "#0F6E56", color: "white",
-    border: "none", borderRadius: "10px", fontSize: "14px",
-    fontWeight: "700", cursor: "pointer",
-  },
-  hint: { fontSize: "13px", color: "#94a3b8", marginBottom: "16px" },
-  link: { fontSize: "13px", color: "#0F6E56", fontWeight: "600", textDecoration: "none" },
-  linkSecundario: {
-    display: "block", marginTop: "16px",
-    fontSize: "13px", color: "#94a3b8", textDecoration: "none",
-  },
-};

@@ -22,9 +22,9 @@ const transporter = smtpConfigurado
     })
   : null;
 
-export async function enviarEmailRecuperacion(destinatario, nombre, token, baseUrl) {
+export async function enviarEmailRecuperacion(destinatario, nombre, token, baseUrl, ruta = "/tienda/resetear-contrasena") {
   if (!smtpConfigurado) return;
-  const enlace = `${baseUrl}/tienda/resetear-contrasena?token=${token}`;
+  const enlace = `${baseUrl}${ruta}?token=${token}`;
 
   await transporter.sendMail({
     from:    `"Merkai" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,

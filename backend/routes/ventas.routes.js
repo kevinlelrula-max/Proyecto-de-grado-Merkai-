@@ -6,7 +6,7 @@ import {
   historialCliente,
   reporteProductos
 } from "../controllers/ventas.controller.js";
-import { verificarToken } from "../middlewares/auth.middleware.js";
+import { verificarToken, requierePermiso } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -14,10 +14,10 @@ const router = Router();
 router.post("/", verificarToken, crearVenta);
 
 // Ventas de la empresa logueada
-router.get("/empresa", verificarToken, listarVentasEmpresa);
+router.get("/empresa", verificarToken, requierePermiso("ventas"), listarVentasEmpresa);
 
 // Reportes
-router.get("/reportes/productos", verificarToken, reporteProductos);
+router.get("/reportes/productos", verificarToken, requierePermiso("reportes"), reporteProductos);
 
 // ✅ Nuevas — van ANTES de /:id para que Express no las confunda con un id
 router.get("/cliente/:cliente_id", verificarToken, historialCliente);
