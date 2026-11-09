@@ -14,7 +14,7 @@ const router = Router();
 router.post("/", verificarToken, crearVenta);
 
 // Ventas de la empresa logueada
-router.get("/empresa", verificarToken, requierePermiso("ventas"), listarVentasEmpresa);
+router.get("/empresa", verificarToken, requierePermiso("ventas", "pos"), listarVentasEmpresa);
 
 // Reportes
 router.get("/reportes/productos", verificarToken, requierePermiso("reportes"), reporteProductos);
