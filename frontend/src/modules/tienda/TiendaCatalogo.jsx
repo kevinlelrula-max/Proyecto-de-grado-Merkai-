@@ -72,21 +72,27 @@ useEffect(() => {
     pedidoExitoso, confirmarPedido, cerrarExito,
   } = useTiendaEmpresa(empresaId, empresaSlug);
 
-  // Cargar stats de reseñas para todos los productos
+  // Cargar stats de reseñas para todos los productos.
+  // La dependencia es la lista de ids (texto estable) y no el arreglo "productos": ese arreglo se
+  // vuelve a crear en cada render y hacía que este efecto se repitiera sin parar (bucle de peticiones).
+  const clavesProductos = productos.map(p => p.id).join(",");
   useEffect(() => {
-    if (!productos.length) return;
+    if (!clavesProductos) return;
+    let activo = true;
     Promise.all(
-      productos.map(p =>
-        getReseñasProducto(p.id)
-          .then(data => ({ id: p.id, stats: data.stats }))
-          .catch(() => ({ id: p.id, stats: null }))
+      clavesProductos.split(",").map(id =>
+        getReseñasProducto(id)
+          .then(data => ({ id, stats: data.stats }))
+          .catch(() => ({ id, stats: null }))
       )
     ).then(resultados => {
+      if (!activo) return;
       const map = {};
       resultados.forEach(r => { map[r.id] = r.stats; });
       setStatsReseñas(map);
     });
-  }, [productos]);
+    return () => { activo = false; };
+  }, [clavesProductos]);
 
   // 2️⃣ Navigate a la ruta correcta con slug
   const handlePagoExitoso = () => {
