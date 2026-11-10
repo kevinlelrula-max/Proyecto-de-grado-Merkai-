@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { aBogota, HOY_BOGOTA, fechaCO } from "../utils/fechasBogota.js";
 
 export const getreporteEmpresa = async (req, res) => {
   try {
@@ -8,7 +9,7 @@ export const getreporteEmpresa = async (req, res) => {
     // periodo: hoy | semana | mes | año  (default: mes)
     const periodo = req.query.periodo || "mes";
     let fechaDesde;
-    const ahora = new Date();
+    const ahora = new Date(fechaCO(0) + "T12:00:00"); // hoy en Colombia
 
     if (periodo === "hoy") {
       fechaDesde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
@@ -27,21 +28,21 @@ export const getreporteEmpresa = async (req, res) => {
     const kpis = await pool.query(
       `SELECT
          (SELECT COUNT(*) FROM ventas
-          WHERE empresa_id=$1 AND DATE(fecha) >= $2)
+          WHERE empresa_id=$1 AND ${aBogota("fecha")} >= $2)
          + (SELECT COUNT(*) FROM pedidos_online
-            WHERE empresa_id=$1 AND DATE(fecha_pedido) >= $2 AND estado != 'cancelado')
+            WHERE empresa_id=$1 AND ${aBogota("fecha_pedido")} >= $2 AND estado != 'cancelado')
          AS total_ventas,
 
          COALESCE((SELECT SUM(total) FROM ventas
-                   WHERE empresa_id=$1 AND DATE(fecha) >= $2), 0)
+                   WHERE empresa_id=$1 AND ${aBogota("fecha")} >= $2), 0)
          + COALESCE((SELECT SUM(total) FROM pedidos_online
-                     WHERE empresa_id=$1 AND DATE(fecha_pedido) >= $2 AND estado != 'cancelado'), 0)
+                     WHERE empresa_id=$1 AND ${aBogota("fecha_pedido")} >= $2 AND estado != 'cancelado'), 0)
          AS ingresos,
 
          (SELECT COUNT(DISTINCT cliente_id) FROM ventas
-          WHERE empresa_id=$1 AND DATE(fecha) >= $2)
+          WHERE empresa_id=$1 AND ${aBogota("fecha")} >= $2)
          + (SELECT COUNT(DISTINCT cliente_id) FROM pedidos_online
-            WHERE empresa_id=$1 AND DATE(fecha_pedido) >= $2 AND estado != 'cancelado')
+            WHERE empresa_id=$1 AND ${aBogota("fecha_pedido")} >= $2 AND estado != 'cancelado')
          AS clientes_activos`,
       [empresa_id, desde]
     );
@@ -53,16 +54,16 @@ export const getreporteEmpresa = async (req, res) => {
     const ventasPorDia = await pool.query(
       `SELECT dia, SUM(total) AS total, SUM(pos) AS pos, SUM(online) AS online
        FROM (
-         SELECT DATE(fecha) AS dia, SUM(total) AS total, SUM(total) AS pos, 0 AS online
+         SELECT ${aBogota("fecha")} AS dia, SUM(total) AS total, SUM(total) AS pos, 0 AS online
          FROM ventas
-         WHERE empresa_id=$1 AND DATE(fecha) >= $2
+         WHERE empresa_id=$1 AND ${aBogota("fecha")} >= $2
          GROUP BY dia
 
          UNION ALL
 
-         SELECT DATE(fecha_pedido) AS dia, SUM(total) AS total, 0 AS pos, SUM(total) AS online
+         SELECT ${aBogota("fecha_pedido")} AS dia, SUM(total) AS total, 0 AS pos, SUM(total) AS online
          FROM pedidos_online
-         WHERE empresa_id=$1 AND DATE(fecha_pedido) >= $2 AND estado != 'cancelado'
+         WHERE empresa_id=$1 AND ${aBogota("fecha_pedido")} >= $2 AND estado != 'cancelado'
          GROUP BY dia
        ) t
        GROUP BY dia
@@ -80,7 +81,7 @@ export const getreporteEmpresa = async (req, res) => {
          FROM detalle_venta dv
          JOIN productos p  ON p.id = dv.producto_id
          JOIN ventas v      ON v.id = dv.venta_id
-         WHERE v.empresa_id=$1 AND DATE(v.fecha) >= $2
+         WHERE v.empresa_id=$1 AND ${aBogota("v.fecha")} >= $2
          GROUP BY p.nombre
 
          UNION ALL
@@ -91,7 +92,7 @@ export const getreporteEmpresa = async (req, res) => {
          FROM detalle_pedido_online dp
          JOIN productos p         ON p.id = dp.producto_id
          JOIN pedidos_online po    ON po.id = dp.pedido_id
-         WHERE po.empresa_id=$1 AND DATE(po.fecha_pedido) >= $2 AND po.estado != 'cancelado'
+         WHERE po.empresa_id=$1 AND ${aBogota("po.fecha_pedido")} >= $2 AND po.estado != 'cancelado'
          GROUP BY p.nombre
        ) t
        GROUP BY nombre
@@ -108,7 +109,7 @@ export const getreporteEmpresa = async (req, res) => {
                 SUM(v.total) AS total, COUNT(*) AS compras
          FROM ventas v
          JOIN persona pe ON pe.id = v.cliente_id
-         WHERE v.empresa_id=$1 AND DATE(v.fecha) >= $2
+         WHERE v.empresa_id=$1 AND ${aBogota("v.fecha")} >= $2
          GROUP BY pe.nombre, pe.apellido
 
          UNION ALL
@@ -117,7 +118,7 @@ export const getreporteEmpresa = async (req, res) => {
                 SUM(po.total) AS total, COUNT(*) AS compras
          FROM pedidos_online po
          JOIN persona pe ON pe.id = po.cliente_id
-         WHERE po.empresa_id=$1 AND DATE(po.fecha_pedido) >= $2 AND po.estado != 'cancelado'
+         WHERE po.empresa_id=$1 AND ${aBogota("po.fecha_pedido")} >= $2 AND po.estado != 'cancelado'
          GROUP BY pe.nombre, pe.apellido
        ) t
        GROUP BY nombre
@@ -130,9 +131,9 @@ export const getreporteEmpresa = async (req, res) => {
     const posVsOnline = await pool.query(
       `SELECT
          COALESCE((SELECT SUM(total) FROM ventas
-                   WHERE empresa_id=$1 AND DATE(fecha) >= $2), 0) AS pos,
+                   WHERE empresa_id=$1 AND ${aBogota("fecha")} >= $2), 0) AS pos,
          COALESCE((SELECT SUM(total) FROM pedidos_online
-                   WHERE empresa_id=$1 AND DATE(fecha_pedido) >= $2 AND estado != 'cancelado'), 0) AS online`,
+                   WHERE empresa_id=$1 AND ${aBogota("fecha_pedido")} >= $2 AND estado != 'cancelado'), 0) AS online`,
       [empresa_id, desde]
     );
 
@@ -189,7 +190,7 @@ export const getRentabilidad = async (req, res) => {
          FROM detalle_venta dv
          JOIN ventas v    ON v.id  = dv.venta_id
          JOIN productos pr ON pr.id = dv.producto_id
-         WHERE v.empresa_id = $1 AND DATE(v.fecha) >= $2
+         WHERE v.empresa_id = $1 AND ${aBogota("v.fecha")} >= $2
          GROUP BY dv.producto_id
 
          UNION ALL
@@ -201,7 +202,7 @@ export const getRentabilidad = async (req, res) => {
          FROM detalle_pedido_online dp
          JOIN pedidos_online po ON po.id  = dp.pedido_id
          JOIN productos pr      ON pr.id  = dp.producto_id
-         WHERE po.empresa_id = $1 AND DATE(po.fecha_pedido) >= $2
+         WHERE po.empresa_id = $1 AND ${aBogota("po.fecha_pedido")} >= $2
            AND po.estado != 'cancelado'
          GROUP BY dp.producto_id
        ) t
@@ -246,21 +247,21 @@ export const getComparativa = async (req, res) => {
     const kpisQuery = (desdeStr, hastaStr) => pool.query(
       `SELECT
          (SELECT COUNT(*) FROM ventas
-          WHERE empresa_id=$1 AND DATE(fecha) BETWEEN $2 AND $3)
+          WHERE empresa_id=$1 AND ${aBogota("fecha")} BETWEEN $2 AND $3)
          + (SELECT COUNT(*) FROM pedidos_online
-            WHERE empresa_id=$1 AND DATE(fecha_pedido) BETWEEN $2 AND $3
+            WHERE empresa_id=$1 AND ${aBogota("fecha_pedido")} BETWEEN $2 AND $3
             AND estado != 'cancelado')                                  AS total_ventas,
 
          COALESCE((SELECT SUM(total) FROM ventas
-                   WHERE empresa_id=$1 AND DATE(fecha) BETWEEN $2 AND $3), 0)
+                   WHERE empresa_id=$1 AND ${aBogota("fecha")} BETWEEN $2 AND $3), 0)
          + COALESCE((SELECT SUM(total) FROM pedidos_online
-                     WHERE empresa_id=$1 AND DATE(fecha_pedido) BETWEEN $2 AND $3
+                     WHERE empresa_id=$1 AND ${aBogota("fecha_pedido")} BETWEEN $2 AND $3
                      AND estado != 'cancelado'), 0)                     AS ingresos,
 
          (SELECT COUNT(DISTINCT cliente_id) FROM ventas
-          WHERE empresa_id=$1 AND DATE(fecha) BETWEEN $2 AND $3)
+          WHERE empresa_id=$1 AND ${aBogota("fecha")} BETWEEN $2 AND $3)
          + (SELECT COUNT(DISTINCT cliente_id) FROM pedidos_online
-            WHERE empresa_id=$1 AND DATE(fecha_pedido) BETWEEN $2 AND $3
+            WHERE empresa_id=$1 AND ${aBogota("fecha_pedido")} BETWEEN $2 AND $3
             AND estado != 'cancelado')                                  AS clientes_activos`,
       [empresa_id, desdeStr, hastaStr]
     );
@@ -286,13 +287,13 @@ export const getComparativa = async (req, res) => {
     const diasQuery = (desdeStr, hastaStr) => pool.query(
       `SELECT dia, SUM(total) AS total
        FROM (
-         SELECT DATE(fecha) AS dia, SUM(total) AS total
-         FROM ventas WHERE empresa_id=$1 AND DATE(fecha) BETWEEN $2 AND $3
+         SELECT ${aBogota("fecha")} AS dia, SUM(total) AS total
+         FROM ventas WHERE empresa_id=$1 AND ${aBogota("fecha")} BETWEEN $2 AND $3
          GROUP BY dia
          UNION ALL
-         SELECT DATE(fecha_pedido) AS dia, SUM(total) AS total
+         SELECT ${aBogota("fecha_pedido")} AS dia, SUM(total) AS total
          FROM pedidos_online WHERE empresa_id=$1
-           AND DATE(fecha_pedido) BETWEEN $2 AND $3 AND estado != 'cancelado'
+           AND ${aBogota("fecha_pedido")} BETWEEN $2 AND $3 AND estado != 'cancelado'
          GROUP BY dia
        ) t GROUP BY dia ORDER BY dia ASC`,
       [empresa_id, desdeStr, hastaStr]
@@ -336,7 +337,7 @@ export const getComparativa = async (req, res) => {
 // HELPERS de fechas
 // ─────────────────────────────────────────────────────────────────────────────
 function calcDesde(periodo) {
-  const ahora = new Date();
+  const ahora = new Date(fechaCO(0) + "T12:00:00"); // hoy en Colombia
   if (periodo === "hoy")    return ahora.toISOString().slice(0, 10);
   if (periodo === "semana") {
     const d = new Date(ahora); d.setDate(ahora.getDate() - 6);
@@ -347,7 +348,7 @@ function calcDesde(periodo) {
 }
 
 function calcRangos(periodo) {
-  const ahora = new Date();
+  const ahora = new Date(fechaCO(0) + "T12:00:00"); // hoy en Colombia
   const fmt   = (d) => d.toISOString().slice(0, 10);
 
   if (periodo === "hoy") {
@@ -391,20 +392,20 @@ export const getResumenInicio = async (req, res) => {
     const ventasHoy = await pool.query(
       `SELECT
          (SELECT COUNT(*) FROM ventas
-          WHERE empresa_id = $1 AND DATE(fecha) = CURRENT_DATE)
+          WHERE empresa_id = $1 AND ${aBogota("fecha")} = ${HOY_BOGOTA})
          +
          (SELECT COUNT(*) FROM pedidos_online
-          WHERE empresa_id = $1 AND DATE(fecha_pedido) = CURRENT_DATE
+          WHERE empresa_id = $1 AND ${aBogota("fecha_pedido")} = ${HOY_BOGOTA}
           AND estado != 'cancelado')
          AS total_ventas,
          COALESCE(
            (SELECT SUM(total) FROM ventas
-            WHERE empresa_id = $1 AND DATE(fecha) = CURRENT_DATE), 0
+            WHERE empresa_id = $1 AND ${aBogota("fecha")} = ${HOY_BOGOTA}), 0
          )
          +
          COALESCE(
            (SELECT SUM(total) FROM pedidos_online
-            WHERE empresa_id = $1 AND DATE(fecha_pedido) = CURRENT_DATE
+            WHERE empresa_id = $1 AND ${aBogota("fecha_pedido")} = ${HOY_BOGOTA}
             AND estado != 'cancelado'), 0
          )
          AS ingresos_hoy`,
@@ -548,13 +549,13 @@ export const getResumenInicio = async (req, res) => {
          COALESCE(
            (SELECT SUM(total) FROM ventas
             WHERE empresa_id = $1
-            AND DATE_TRUNC('month', fecha) = DATE_TRUNC('month', CURRENT_DATE)), 0
+            AND DATE_TRUNC('month', ${aBogota("fecha")}) = DATE_TRUNC('month', ${HOY_BOGOTA})), 0
          )
          +
          COALESCE(
            (SELECT SUM(total) FROM pedidos_online
             WHERE empresa_id = $1
-            AND DATE_TRUNC('month', fecha_pedido) = DATE_TRUNC('month', CURRENT_DATE)
+            AND DATE_TRUNC('month', ${aBogota("fecha_pedido")}) = DATE_TRUNC('month', ${HOY_BOGOTA})
             AND estado != 'cancelado'), 0
          ) AS total_mes`,
       [empresa_id]
@@ -563,15 +564,16 @@ export const getResumenInicio = async (req, res) => {
     // Clientes dormidos: sin compra en los últimos 30 días
     const clientesDormidos = await pool.query(
       `SELECT p.id, p.nombre, p.apellido, p.telefono,
-              MAX(GREATEST(
+              -- Sin compras = NULL (antes salía 2000-01-01 y el panel mostraba "Hace 9810 días")
+              NULLIF(MAX(GREATEST(
                 COALESCE(v.fecha::date, '2000-01-01'::date),
                 COALESCE(po.fecha_pedido::date, '2000-01-01'::date)
-              )) AS ultima_compra
+              )), '2000-01-01'::date) AS ultima_compra
        FROM persona p
        LEFT JOIN ventas v ON v.cliente_id = p.id AND v.empresa_id = $1
        LEFT JOIN pedidos_online po ON po.cliente_id = p.id AND po.empresa_id = $1
                                    AND po.estado != 'cancelado'
-       WHERE p.empresa_id = $1 AND p.rol_id = 4
+       WHERE p.empresa_id = $1 AND p.rol_id = 4 AND p.activo IS NOT FALSE
        GROUP BY p.id, p.nombre, p.apellido, p.telefono
        HAVING MAX(GREATEST(
                 COALESCE(v.fecha::date, '2000-01-01'::date),
@@ -653,16 +655,16 @@ export const getResumenDiario = async (req, res) => {
     // Ingresos y transacciones: hoy y ayer
     const comparacion = await pool.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN DATE(fecha) = CURRENT_DATE THEN total ELSE 0 END), 0)          AS ingresos_hoy,
-         COALESCE(SUM(CASE WHEN DATE(fecha) = CURRENT_DATE - 1 THEN total ELSE 0 END), 0)      AS ingresos_ayer,
-         COUNT(CASE WHEN DATE(fecha) = CURRENT_DATE THEN 1 END)                                AS tx_hoy,
-         COUNT(CASE WHEN DATE(fecha) = CURRENT_DATE - 1 THEN 1 END)                            AS tx_ayer
+         COALESCE(SUM(CASE WHEN ${aBogota("fecha")} = ${HOY_BOGOTA} THEN total ELSE 0 END), 0)          AS ingresos_hoy,
+         COALESCE(SUM(CASE WHEN ${aBogota("fecha")} = ${HOY_BOGOTA} - 1 THEN total ELSE 0 END), 0)      AS ingresos_ayer,
+         COUNT(CASE WHEN ${aBogota("fecha")} = ${HOY_BOGOTA} THEN 1 END)                                AS tx_hoy,
+         COUNT(CASE WHEN ${aBogota("fecha")} = ${HOY_BOGOTA} - 1 THEN 1 END)                            AS tx_ayer
        FROM (
          SELECT fecha, total FROM ventas
-         WHERE empresa_id = $1 AND DATE(fecha) >= CURRENT_DATE - 1
+         WHERE empresa_id = $1 AND ${aBogota("fecha")} >= ${HOY_BOGOTA} - 1
          UNION ALL
          SELECT fecha_pedido AS fecha, total FROM pedidos_online
-         WHERE empresa_id = $1 AND DATE(fecha_pedido) >= CURRENT_DATE - 1
+         WHERE empresa_id = $1 AND ${aBogota("fecha_pedido")} >= ${HOY_BOGOTA} - 1
            AND estado != 'cancelado'
        ) t`,
       [empresa_id]
@@ -677,12 +679,12 @@ export const getResumenDiario = async (req, res) => {
          SELECT dv.producto_id, dv.cantidad, dv.precio_unitario
          FROM detalle_venta dv
          JOIN ventas v ON v.id = dv.venta_id
-         WHERE v.empresa_id = $1 AND DATE(v.fecha) = CURRENT_DATE
+         WHERE v.empresa_id = $1 AND ${aBogota("v.fecha")} = ${HOY_BOGOTA}
          UNION ALL
          SELECT dp.producto_id, dp.cantidad, dp.precio_unitario
          FROM detalle_pedido_online dp
          JOIN pedidos_online po ON po.id = dp.pedido_id
-         WHERE po.empresa_id = $1 AND DATE(po.fecha_pedido) = CURRENT_DATE
+         WHERE po.empresa_id = $1 AND ${aBogota("po.fecha_pedido")} = ${HOY_BOGOTA}
            AND po.estado != 'cancelado'
        ) d
        JOIN productos p ON p.id = d.producto_id
@@ -697,7 +699,7 @@ export const getResumenDiario = async (req, res) => {
       `SELECT EXTRACT(HOUR FROM fecha)::int AS hora,
               ROUND(SUM(total)::numeric, 0) AS total
        FROM ventas
-       WHERE empresa_id = $1 AND DATE(fecha) = CURRENT_DATE
+       WHERE empresa_id = $1 AND ${aBogota("fecha")} = ${HOY_BOGOTA}
        GROUP BY hora
        ORDER BY hora`,
       [empresa_id]
@@ -707,7 +709,7 @@ export const getResumenDiario = async (req, res) => {
     const entregados = await pool.query(
       `SELECT COUNT(*) AS total
        FROM pedidos_online
-       WHERE empresa_id = $1 AND DATE(fecha_pedido) = CURRENT_DATE AND estado = 'entregado'`,
+       WHERE empresa_id = $1 AND ${aBogota("fecha_pedido")} = ${HOY_BOGOTA} AND estado = 'entregado'`,
       [empresa_id]
     );
 
@@ -781,8 +783,8 @@ export const getPronosticoVentas = async (req, res) => {
     // Ventas diarias de los últimos 28 días (POS + pedidos online)
     const { rows } = await pool.query(
       `SELECT
-         DATE(t.fecha)::text                      AS dia,
-         EXTRACT(DOW FROM t.fecha)::int           AS dow,
+         ${aBogota("t.fecha")}::text                      AS dia,
+         EXTRACT(DOW FROM ${aBogota("t.fecha")})::int AS dow,
          COALESCE(SUM(t.total), 0)::float         AS ingresos
        FROM (
          SELECT fecha::timestamp, total FROM ventas
@@ -793,13 +795,12 @@ export const getPronosticoVentas = async (req, res) => {
            AND fecha_pedido >= CURRENT_DATE - INTERVAL '28 days'
            AND estado != 'cancelado'
        ) t
-       GROUP BY DATE(t.fecha), EXTRACT(DOW FROM t.fecha)
+       GROUP BY ${aBogota("t.fecha")}, EXTRACT(DOW FROM ${aBogota("t.fecha")})
        ORDER BY dia`,
       [empresa_id]
     );
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = new Date(fechaCO(0) + "T00:00:00"); // hoy en Colombia
 
     const toMs = d => new Date(d + "T00:00:00").getTime();
 
