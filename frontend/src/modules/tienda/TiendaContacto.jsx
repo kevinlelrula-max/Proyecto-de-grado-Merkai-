@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
 import TiendaLayout from "./components/TiendaLayout";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -12,6 +12,12 @@ export default function TiendaContacto() {
     if (empresaSlug) localStorage.setItem("ultima_empresa_slug", empresaSlug);
   }, [empresaSlug]);
 
+  const navigate        = useNavigate();
+  // Esta página no maneja el carrito: se lee el guardado para que el contador se mantenga
+  const carritoGuardado = (() => {
+    try { const g = JSON.parse(localStorage.getItem(`fishware_carrito_${empresaSlug}`) || "[]"); return Array.isArray(g) ? g : []; }
+    catch { return []; }
+  })();
   const empresa         = location.state?.empresa
     || JSON.parse(localStorage.getItem("ultima_empresa") || "null");
   const colorMarca      = empresa?.color_primario   || "#0F6E56";
@@ -51,7 +57,7 @@ export default function TiendaContacto() {
   };
 
   return (
-    <TiendaLayout empresa={empresa} carrito={[]} onAbrirCarrito={() => {}}>
+    <TiendaLayout empresa={empresa} carrito={carritoGuardado} onAbrirCarrito={() => navigate(`/tienda/${empresaSlug}/catalogo`)}>
       <div style={s.page}>
 
         {/* Título */}

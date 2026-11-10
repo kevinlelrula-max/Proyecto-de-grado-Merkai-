@@ -18,7 +18,15 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
   const [busqueda, setBusqueda]         = useState("");
 
   // ── Estado carrito
-  const [carrito, setCarrito]               = useState([]);
+  // El carrito se inicia con lo guardado para esta tienda: al cambiar de página el hook se vuelve a montar
+  // y, si empezara vacío, el efecto de persistencia borraría el carrito guardado antes de restaurarlo.
+  const [carrito, setCarrito]               = useState(() => {
+    if (!empresaSlug || localStorage.getItem("fishware_repetir_pedido")) return [];
+    try {
+      const guardado = JSON.parse(localStorage.getItem(`fishware_carrito_${empresaSlug}`) || "[]");
+      return Array.isArray(guardado) ? guardado : [];
+    } catch { return []; }
+  });
   const [carritoAbierto, setCarritoAbierto] = useState(false);
 
   // ── Estado pedido
@@ -70,8 +78,16 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
   // ── Cargar métodos de pago
   useEffect(() => {
     getMetodosPago().then((data) => {
-      setMetodosPago(data);
-      if (data.length > 0) setMetodoPagoId(data[0].id);
+      // se descartan métodos repetidos (mismo nombre) para no mostrar los botones duplicados
+      const vistos = new Set();
+      const unicos = (data || []).filter((m) => {
+        const k = String(m.nombre || m.id).trim().toLowerCase();
+        if (vistos.has(k)) return false;
+        vistos.add(k);
+        return true;
+      });
+      setMetodosPago(unicos);
+      if (unicos.length > 0) setMetodoPagoId(unicos[0].id);
     });
   }, []);
 
@@ -208,7 +224,7 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
   const totalPrecio = carrito.reduce((acc, item) => acc + item.cantidad * item.precio, 0);
 
   // ── PEDIDO: confirmar
-  const confirmarPedido = useCallback(async (totalFinal = totalPrecio, cuponId = null, departamentoId = null) => {
+  const confirmarPedido = useCallback(async (totalFinal = totalPrecio, cuponId = null, departamentoId = null, ubicacionTexto = "") => {
     const clienteToken = localStorage.getItem("cliente_token");
     const clienteId    = localStorage.getItem("cliente_id");
 
@@ -233,7 +249,7 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
       const payload = {
         empresa_id:        empresaId,
         metodo_pago_id:    metodoPagoId,
-        direccion_entrega: direccion.trim(),
+        direccion_entrega: [direccion.trim(), ubicacionTexto].filter(Boolean).join(", "),
         notas:             notas.trim() || null,
         total:             totalFinal,
         cupon_id:          cuponId || null,

@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useEnvioCliente } from "../hooks/useEnvioCliente";
+import { getMunicipios } from "../../ubicacion/services/ubicacion.api";
 
 const DEPARTAMENTOS = [
   { id: 5,  nombre: "Antioquia" },
@@ -45,7 +46,10 @@ const DEPARTAMENTOS = [
  *   onCostoChange(costo: number, departamentoId: number|null) — costo calculado y
  *                                   departamento elegido (el servidor recalcula el envío con él).
  */
-export default function EnvioForm({ empresa_id, onCostoChange }) {
+export default function EnvioForm({ empresa_id, onCostoChange, onUbicacionChange }) {
+  // Municipio: dato informativo que se agrega a la dirección de entrega (el costo sigue siendo por departamento)
+  const [municipios, setMunicipios]       = useState([]);
+  const [municipioId, setMunicipioId]     = useState("");
   const {
     departamentos,
     depSeleccionado,
@@ -60,6 +64,26 @@ export default function EnvioForm({ empresa_id, onCostoChange }) {
   useEffect(() => {
     if (onCostoChange) onCostoChange(costoAplicado, depSeleccionado, requiereDepartamento);
   }, [costoAplicado, depSeleccionado, requiereDepartamento, onCostoChange]);
+
+  // Al cambiar de departamento se cargan sus municipios y se limpia el elegido
+  useEffect(() => {
+    setMunicipioId("");
+    setMunicipios([]);
+    if (depSeleccionado == null) return;
+    let activo = true;
+    getMunicipios(depSeleccionado, null)
+      .then((lista) => { if (activo && Array.isArray(lista)) setMunicipios(lista); })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, [depSeleccionado]);
+
+  // Se informa al carrito el departamento y el municipio para armar la dirección completa
+  useEffect(() => {
+    if (!onUbicacionChange) return;
+    const dep = DEPARTAMENTOS.find((d) => d.id === depSeleccionado)?.nombre || "";
+    const mun = municipios.find((m) => String(m.id) === String(municipioId))?.nombre || "";
+    onUbicacionChange({ departamento: dep, municipio: mun });
+  }, [depSeleccionado, municipioId, municipios, onUbicacionChange]);
 
   if (loading) {
     return (
@@ -101,6 +125,21 @@ export default function EnvioForm({ empresa_id, onCostoChange }) {
           );
         })}
       </select>
+
+      {depSeleccionado !== null && municipios.length > 0 && (
+        <>
+          <label style={s.label} htmlFor="envio-mun">Municipio</label>
+          <select
+            id="envio-mun"
+            style={s.select}
+            value={municipioId}
+            onChange={e => setMunicipioId(e.target.value)}
+          >
+            <option value="">— Selecciona tu municipio —</option>
+            {municipios.map(m => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+          </select>
+        </>
+      )}
 
       {depSeleccionado !== null && (
         <div style={{ ...s.badge, ...(esGratis ? s.badgeGratis : s.badgeCobro) }}>

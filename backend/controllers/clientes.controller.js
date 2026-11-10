@@ -615,32 +615,56 @@ export const loginGoogleCliente = async (req, res) => {
     const { credential } = req.body;
     if (!credential) return res.status(400).json({ error: "Credencial de Google requerida" });
 
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID,
-    });
-    const { email, given_name, family_name, sub: google_id } = ticket.getPayload();
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch (err) {
+      console.error("[Google cliente] token no verificado:", err.message);
+      return res.status(401).json({ error: "No se pudo verificar la cuenta de Google. Intenta de nuevo." });
+    }
+    const { email, given_name, family_name, email_verified } = payload;
+    if (!email || email_verified === false) {
+      return res.status(401).json({ error: "La cuenta de Google no tiene un correo verificado." });
+    }
 
+    // Se busca por correo sin filtrar el rol: el usuario es único en toda la tabla persona
     const existing = await pool.query(
-      "SELECT id, nombre, apellido, usuario, rol_id, activo FROM persona WHERE usuario = $1 AND rol_id = 4",
+      "SELECT id, nombre, apellido, usuario, rol_id, activo FROM persona WHERE usuario = $1",
       [email]
     );
 
     let user;
     if (existing.rows.length > 0) {
       user = existing.rows[0];
+      if (user.rol_id !== 4) {
+        // El correo ya pertenece a un usuario de empresa: antes esto intentaba crear otra fila y fallaba con error 500
+        return res.status(409).json({
+          error: "Este correo ya está registrado como usuario de una empresa. Para comprar en la tienda usa otro correo.",
+        });
+      }
       if (user.activo === false) {
         return res.status(403).json({ error: "Esta cuenta está desactivada. Comunícate con la tienda." });
       }
     } else {
       const randomPass = await bcrypt.hash(crypto.randomBytes(24).toString("hex"), 10);
-      const codigoPropio = generarCodigo(given_name || "CLI");
-      const inserted = await pool.query(
-        `INSERT INTO persona (nombre, apellido, usuario, contrasena, rol_id, codigo_referido)
-         VALUES ($1, $2, $3, $4, 4, $5)
-         RETURNING id, nombre, apellido, usuario, rol_id`,
-        [given_name || "Usuario", family_name || "Google", email, randomPass, codigoPropio]
-      );
+      let inserted;
+      // el código de referido es único: si coincide con otro, se reintenta con uno nuevo
+      for (let intento = 0; intento < 5 && !inserted; intento++) {
+        try {
+          inserted = await pool.query(
+            `INSERT INTO persona (nombre, apellido, usuario, contrasena, rol_id, codigo_referido)
+             VALUES ($1, $2, $3, $4, 4, $5)
+             RETURNING id, nombre, apellido, usuario, rol_id`,
+            [given_name || "Usuario", family_name || "Google", email, randomPass, generarCodigo(given_name || "CLI")]
+          );
+        } catch (e) {
+          if (e.code !== "23505" || intento === 4) throw e;
+        }
+      }
       user = inserted.rows[0];
     }
 

@@ -41,6 +41,14 @@ export default function Carrito({
   }, []);
   const faltaDepartamento = requiereDepartamento && !departamentoId;
 
+  // Departamento y municipio elegidos: se agregan a la dirección de entrega del pedido
+  const [ubicacion, setUbicacion] = useState({ departamento: "", municipio: "" });
+  const handleUbicacion = useCallback((u) => {
+    setUbicacion((prev) => (prev.departamento === u.departamento && prev.municipio === u.municipio ? prev : u));
+  }, []);
+  const ubicacionTexto = [ubicacion.municipio, ubicacion.departamento].filter(Boolean).join(", ");
+  const direccionCompleta = [direccion.trim(), ubicacionTexto].filter(Boolean).join(", ");
+
   // Descuento de referido
   const [descuentoReferido, setDescuentoReferido] = useState(null);
   useEffect(() => {
@@ -114,7 +122,7 @@ export default function Carrito({
     empresaId,
     carrito,
     totalPrecio:     totalConEnvio,
-    direccion,
+    direccion:       direccionCompleta,
     notas,
     metodoPagoId,
     cuponId:         cuponAplicado?.cupon_id  || null,
@@ -146,7 +154,7 @@ export default function Carrito({
 
   const handleConfirmarPedido = () => {
     setMetodoConfirmado(metodoSeleccionado?.metodo?.toLowerCase());
-    confirmarPedido(totalConEnvio, cuponAplicado?.cupon_id || null, departamentoId);
+    confirmarPedido(totalConEnvio, cuponAplicado?.cupon_id || null, departamentoId, ubicacionTexto);
   };
 
   if (!carritoAbierto) return null;
@@ -234,7 +242,7 @@ export default function Carrito({
               </div>
 
               {/* Selector de envío */}
-              <EnvioForm empresa_id={empresaId} onCostoChange={handleCostoEnvio} />
+              <EnvioForm empresa_id={empresaId} onCostoChange={handleCostoEnvio} onUbicacionChange={handleUbicacion} />
 
               {/* Cupón */}
               <div>
