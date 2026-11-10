@@ -41,6 +41,16 @@ export const getProductos = async (req, res) => {
   }
 };
 
+// La categoría elegida debe ser de la empresa (cada empresa tiene las suyas)
+const categoriaEsDeLaEmpresa = async (categoria_id, empresa_id) => {
+  if (!categoria_id) return true;
+  const { rows } = await pool.query(
+    "SELECT 1 FROM categoria WHERE id = $1 AND empresa_id = $2",
+    [categoria_id, empresa_id]
+  );
+  return rows.length > 0;
+};
+
 // =========================
 // CREAR PRODUCTO
 // =========================
@@ -55,6 +65,10 @@ export const crearProducto = async (req, res) => {
 
     const empresa_id = req.user.empresa_id;
     const files      = req.files || [];
+
+    if (!(await categoriaEsDeLaEmpresa(categoria_id, empresa_id))) {
+      return res.status(400).json({ error: "La categoría seleccionada no es válida" });
+    }
 
     const urls = await Promise.all(
       files.map(f => subirImagen(f.buffer, "merkai/productos").then(r => r.secure_url))
@@ -115,6 +129,10 @@ export const actualizarProducto = async (req, res) => {
       stock, stock_minimo, stock_maximo,
       unidad, codigo_barras, categoria_id
     } = req.body;
+
+    if (!(await categoriaEsDeLaEmpresa(categoria_id, empresa_id))) {
+      return res.status(400).json({ error: "La categoría seleccionada no es válida" });
+    }
 
     const files = req.files || [];
     const newUrls = await Promise.all(

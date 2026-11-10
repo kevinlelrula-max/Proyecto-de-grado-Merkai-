@@ -6,7 +6,8 @@ import pool from "../config/db.js";
 export const getCategorias = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, nombre, estado FROM categoria ORDER BY nombre ASC`
+      `SELECT id, nombre, estado FROM categoria WHERE empresa_id = $1 ORDER BY nombre ASC`,
+      [req.user.empresa_id]
     );
     res.json(result.rows);
   } catch (error) {
@@ -26,10 +27,10 @@ export const crearCategoria = async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO categoria (nombre, estado)
-       VALUES ($1, true)
+      `INSERT INTO categoria (nombre, estado, empresa_id)
+       VALUES ($1, true, $2)
        RETURNING *`,
-      [nombre.trim()]
+      [nombre.trim(), req.user.empresa_id]
     );
 
     res.status(201).json(result.rows[0]);
@@ -54,8 +55,8 @@ export const actualizarCategoria = async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE categoria SET nombre = $1 WHERE id = $2 RETURNING *`,
-      [nombre.trim(), id]
+      `UPDATE categoria SET nombre = $1 WHERE id = $2 AND empresa_id = $3 RETURNING *`,
+      [nombre.trim(), id, req.user.empresa_id]
     );
 
     if (result.rows.length === 0) {
@@ -80,16 +81,16 @@ export const toggleEstadoCategoria = async (req, res) => {
 
     // Verificar si tiene productos activos antes de desactivar
     const productos = await pool.query(
-      `SELECT COUNT(*) FROM productos WHERE categoria_id = $1`,
-      [id]
+      `SELECT COUNT(*) FROM productos WHERE categoria_id = $1 AND empresa_id = $2`,
+      [id, req.user.empresa_id]
     );
 
     const result = await pool.query(
       `UPDATE categoria
        SET estado = NOT estado
-       WHERE id = $1
+       WHERE id = $1 AND empresa_id = $2
        RETURNING *`,
-      [id]
+      [id, req.user.empresa_id]
     );
 
     if (result.rows.length === 0) {
@@ -112,6 +113,15 @@ export const eliminarCategoria = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Solo se pueden eliminar las categorías de la propia empresa
+    const propia = await pool.query(
+      `SELECT 1 FROM categoria WHERE id = $1 AND empresa_id = $2`,
+      [id, req.user.empresa_id]
+    );
+    if (propia.rows.length === 0) {
+      return res.status(404).json({ error: "Categoría no encontrada" });
+    }
+
     // No eliminar si tiene productos asociados
     const productos = await pool.query(
       `SELECT COUNT(*) FROM productos WHERE categoria_id = $1`,
@@ -124,7 +134,7 @@ export const eliminarCategoria = async (req, res) => {
       });
     }
 
-    await pool.query(`DELETE FROM categoria WHERE id = $1`, [id]);
+    await pool.query(`DELETE FROM categoria WHERE id = $1 AND empresa_id = $2`, [id, req.user.empresa_id]);
     res.json({ message: "Categoría eliminada" });
   } catch (error) {
     res.status(500).json({ error: "Error al eliminar categoría" });
