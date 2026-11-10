@@ -85,7 +85,7 @@ export default function Inicio({ onIrA }) {
             href={linkTienda}
             target="_blank"
             rel="noreferrer"
-            className="self-center px-5 py-2.5 bg-slate-900 hover:bg-slate-700 text-white text-sm font-semibold rounded-xl no-underline transition-colors"
+            className="self-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl no-underline transition-colors"
           >
             Ver mi tienda
           </a>
