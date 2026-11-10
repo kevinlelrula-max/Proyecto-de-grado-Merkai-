@@ -1,9 +1,9 @@
 import { useState, useCallback } from "react";
 import { getSesionActiva, getHistorialCaja, abrirCaja, cerrarCaja } from "../services/caja.api";
-import { listarVentasHoy } from "../services/pos.api";
 
-export function useCaja(token) {
-  const [ventas,    setVentas]    = useState([]);
+// Todos los totales los calcula el servidor para la sesión de caja abierta
+// (solo ventas del punto de venta hechas desde la apertura).
+export function useCaja() {
   const [sesion,    setSesion]    = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargando,  setCargando]  = useState(true);
@@ -12,32 +12,21 @@ export function useCaja(token) {
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [ventasData, sesionData, histData] = await Promise.allSettled([
-        listarVentasHoy(token),
+      const [sesionData, histData] = await Promise.allSettled([
         getSesionActiva(),
         getHistorialCaja(),
       ]);
-
-      if (ventasData.status === "fulfilled") {
-        const lista = Array.isArray(ventasData.value)
-          ? ventasData.value
-          : ventasData.value?.ventas || ventasData.value?.data || [];
-        const hoy   = new Date();
-        const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-        setVentas(lista.filter(v => new Date(v.created_at || v.fecha) >= inicio));
-      }
-
       setSesion(sesionData.status === "fulfilled" ? sesionData.value : null);
       setHistorial(histData.status === "fulfilled" ? histData.value.slice(0, 10) : []);
     } finally {
       setCargando(false);
     }
-  }, [token]);
+  }, []);
 
   const handleAbrir = useCallback(async (monto_apertura) => {
     try {
       await abrirCaja(monto_apertura);
-      setMsg({ tipo: "ok", texto: "Caja abierta correctamente" });
+      setMsg({ tipo: "ok", texto: "Caja abierta. Ya puedes registrar ventas." });
       await cargar();
       return true;
     } catch (err) {
@@ -46,10 +35,13 @@ export function useCaja(token) {
     }
   }, [cargar]);
 
-  const handleCerrar = useCallback(async (sesion_id, monto_cierre, observaciones) => {
+  const handleCerrar = useCallback(async (sesion_id, observaciones) => {
     try {
-      await cerrarCaja(sesion_id, monto_cierre, observaciones);
-      setMsg({ tipo: "ok", texto: "Caja cerrada y registrada" });
+      const cerrada = await cerrarCaja(sesion_id, observaciones);
+      setMsg({
+        tipo: "ok",
+        texto: `Caja cerrada. Efectivo en caja: $${Number(cerrada.monto_cierre || 0).toLocaleString("es-CO")}`,
+      });
       await cargar();
       return true;
     } catch (err) {
@@ -60,18 +52,17 @@ export function useCaja(token) {
 
   const limpiarMsg = useCallback(() => setMsg(null), []);
 
-  const totalDia    = ventas.reduce((a, v) => a + Number(v.total || 0), 0);
-  const totalVentas = ventas.length;
-  const promedio    = totalVentas ? totalDia / totalVentas : 0;
-  const porMetodo   = ventas.reduce((acc, v) => {
-    const m = v.metodo_pago || "Otro";
-    acc[m] = (acc[m] || 0) + Number(v.total || 0);
+  const totalVentas = sesion?.ventas_cantidad ?? 0;
+  const totalSesion = Number(sesion?.ventas_total ?? 0);
+  const promedio    = totalVentas ? totalSesion / totalVentas : 0;
+  const porMetodo   = (sesion?.por_metodo ?? []).reduce((acc, m) => {
+    acc[m.metodo] = Number(m.total);
     return acc;
   }, {});
 
   return {
     cargando, sesion, historial,
-    totalDia, totalVentas, promedio, porMetodo,
+    totalSesion, totalVentas, promedio, porMetodo,
     msg, limpiarMsg,
     cargar, handleAbrir, handleCerrar,
   };

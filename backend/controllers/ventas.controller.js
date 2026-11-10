@@ -5,6 +5,14 @@ import { getNivelLealtadCliente, precioInteligente, redondear } from "../utils/c
 // =========================
 // CREAR VENTA
 // =========================
+// Error de validación de negocio: responde 4xx con su mensaje (los demás errores son 500)
+class ErrorVenta extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 export const crearVenta = async (req, res) => {
   const client = await pool.connect();
 
@@ -15,11 +23,33 @@ export const crearVenta = async (req, res) => {
     const { cliente_id, metodo_pago_id, productos } = req.body;
 
     // ✅ Validación previa antes de abrir la transacción
-    if (!cliente_id || !metodo_pago_id || !productos || productos.length === 0) {
+    if (!cliente_id || !metodo_pago_id || !Array.isArray(productos) || productos.length === 0) {
       return res.status(400).json({ error: "Faltan datos obligatorios" });
     }
 
     await client.query("BEGIN");
+
+    // Sin caja abierta no se puede vender: así toda venta queda dentro de una sesión de caja
+    const { rows: cajaAbierta } = await client.query(
+      "SELECT id FROM caja_sesiones WHERE empresa_id = $1 AND estado = 'abierta' LIMIT 1",
+      [empresa_id]
+    );
+    if (cajaAbierta.length === 0) {
+      throw new ErrorVenta("La caja está cerrada. Abre la caja para registrar ventas.", 409);
+    }
+
+    // El cliente debe existir y el método de pago ser válido
+    const { rows: clienteOk } = await client.query(
+      "SELECT 1 FROM persona WHERE id = $1 AND rol_id = 4",
+      [cliente_id]
+    );
+    if (clienteOk.length === 0) throw new ErrorVenta("Cliente no encontrado");
+
+    const { rows: metodoOk } = await client.query(
+      "SELECT 1 FROM metodo_pago WHERE id = $1",
+      [metodo_pago_id]
+    );
+    if (metodoOk.length === 0) throw new ErrorVenta("Método de pago no válido");
 
     // Descuento por nivel de lealtad: se calcula en el servidor, igual que en la tienda en línea
     const { nivel } = await getNivelLealtadCliente(cliente_id, empresa_id, client);
@@ -40,27 +70,29 @@ export const crearVenta = async (req, res) => {
       const { producto_id, cantidad } = item;
 
       // ✅ Validar cantidad > 0 antes del INSERT para dar mensaje claro
-      if (!cantidad || cantidad <= 0) {
-        throw new Error("La cantidad debe ser mayor a 0");
+      if (!Number.isFinite(Number(cantidad)) || Number(cantidad) <= 0) {
+        throw new ErrorVenta("La cantidad debe ser mayor a 0");
       }
 
+      // FOR UPDATE: bloquea el producto hasta el COMMIT para que dos ventas simultáneas
+      // no lean el mismo stock y lo dejen negativo
       const productoResult = await client.query(
-        "SELECT * FROM productos WHERE id = $1 AND empresa_id = $2",
+        "SELECT * FROM productos WHERE id = $1 AND empresa_id = $2 FOR UPDATE",
         [producto_id, empresa_id]
       );
 
       const producto = productoResult.rows[0];
 
       if (!producto) {
-        throw new Error("Producto no encontrado");
+        throw new ErrorVenta("Producto no encontrado");
       }
 
       if (producto.activo === false) {
-        throw new Error(`${producto.nombre} está desactivado y no se puede vender`);
+        throw new ErrorVenta(`${producto.nombre} está desactivado y no se puede vender`);
       }
 
       if (producto.stock < cantidad) {
-        throw new Error(`Stock insuficiente para ${producto.nombre}`);
+        throw new ErrorVenta(`Stock insuficiente para ${producto.nombre} (disponible: ${producto.stock})`, 409);
       }
 
       const precioUnitario = redondear(precioInteligente(producto, descuentoLealtad));
@@ -110,9 +142,12 @@ export const crearVenta = async (req, res) => {
     });
 
   } catch (error) {
-    await client.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => {});
+    if (error instanceof ErrorVenta) {
+      return res.status(error.status).json({ error: error.message });
+    }
     console.error(error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al registrar la venta" });
   } finally {
     client.release();
   }
@@ -126,13 +161,20 @@ export const listarVentasEmpresa = async (req, res) => {
     const empresa_id = req.user.empresa_id;
     const { hoy } = req.query;
  
-    // ✅ Si viene ?hoy=true filtra solo las ventas de hoy
+    // ✅ Si viene ?hoy=true filtra solo las ventas de hoy EN HORA DE COLOMBIA.
+    // Las fechas son "timestamp sin zona" guardadas con la hora del servidor de base de datos
+    // (UTC en Neon): se interpretan en esa zona y se pasan a Bogotá antes de comparar el día,
+    // para que después de las 7 p. m. el "hoy" no salte al día siguiente.
+    const aBogota = (col) =>
+      `((${col} AT TIME ZONE current_setting('TimeZone')) AT TIME ZONE 'America/Bogota')::date`;
+    const hoyBogota = "(NOW() AT TIME ZONE 'America/Bogota')::date";
+
     const filtroFecha = hoy === "true"
-      ? "AND DATE(v.fecha) = CURRENT_DATE"
+      ? `AND ${aBogota("v.fecha")} = ${hoyBogota}`
       : "";
- 
+
     const filtroFechaOnline = hoy === "true"
-      ? "AND DATE(p.fecha_pedido) = CURRENT_DATE"
+      ? `AND ${aBogota("p.fecha_pedido")} = ${hoyBogota}`
       : "";
 
     const result = await pool.query(

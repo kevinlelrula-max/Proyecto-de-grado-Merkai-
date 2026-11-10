@@ -1,6 +1,22 @@
 import pool from "../config/db.js";
 import bcrypt from "bcrypt";
 
+// ¿Es este usuario el propietario (quien registró) de la empresa?
+const esPropietario = async (empresa_id, persona_id) => {
+  const { rows } = await pool.query(
+    "SELECT 1 FROM empresas WHERE id = $1 AND propietario_id = $2",
+    [empresa_id, persona_id]
+  );
+  return rows.length > 0;
+};
+
+// El rol debe existir y no puede ser "Cliente" (los clientes se registran en la tienda)
+const rolValido = async (rol_id) => {
+  if (!Number.isInteger(Number(rol_id)) || Number(rol_id) === 4) return false;
+  const { rows } = await pool.query("SELECT 1 FROM roles WHERE id = $1", [Number(rol_id)]);
+  return rows.length > 0;
+};
+
 // =========================
 // GET USUARIOS (excluye clientes)
 // =========================
@@ -12,9 +28,11 @@ export const getUsuarios = async (req, res) => {
       `SELECT p.id, p.nombre, p.apellido, p.usuario, p.telefono, p.direccion,
               p.numero_documento, p.rol_id, p.id_municipio, p.fecha_registro,
               p.activo,
-              r.nombre AS rol_nombre
+              r.nombre AS rol_nombre,
+              (e.propietario_id = p.id) AS es_propietario
        FROM persona p
        JOIN roles r ON r.id = p.rol_id
+       JOIN empresas e ON e.id = p.empresa_id
        WHERE p.empresa_id = $1 AND p.rol_id != 4
        ORDER BY p.fecha_registro DESC`,
       [empresa_id]
@@ -34,7 +52,7 @@ export const crearUsuario = async (req, res) => {
   try {
     const empresa_id = req.user.empresa_id;
 
-    if (req.user.rol_id !== 1 && req.user.rol_id !== 2) {
+    if (req.user.rol_id !== 2) {
       return res.status(403).json({ error: "No tienes permisos para crear usuarios" });
     }
 
@@ -47,9 +65,8 @@ export const crearUsuario = async (req, res) => {
       return res.status(400).json({ error: "Nombre, usuario, contraseña y rol son obligatorios" });
     }
 
-    // No permitir crear SuperAdmin desde el panel
-    if (Number(rol_id) === 1) {
-      return res.status(403).json({ error: "No se puede crear un SuperAdmin desde el panel" });
+    if (!(await rolValido(rol_id))) {
+      return res.status(400).json({ error: "El rol seleccionado no es válido" });
     }
 
     const hashedPassword = await bcrypt.hash(contrasena, 10);
@@ -82,8 +99,13 @@ export const actualizarUsuario = async (req, res) => {
     const empresa_id = req.user.empresa_id;
     const { nombre, apellido, telefono, direccion, rol_id } = req.body;
 
-    if (Number(rol_id) === 1) {
-      return res.status(403).json({ error: "No se puede asignar el rol SuperAdmin" });
+    if (!(await rolValido(rol_id))) {
+      return res.status(400).json({ error: "El rol seleccionado no es válido" });
+    }
+
+    // El propietario de la empresa siempre es Administrador: nadie puede cambiarle el rol
+    if (Number(rol_id) !== 2 && await esPropietario(empresa_id, id)) {
+      return res.status(403).json({ error: "El propietario de la empresa siempre es Administrador" });
     }
 
     const result = await pool.query(
@@ -117,6 +139,9 @@ export const toggleUsuario = async (req, res) => {
     if (Number(id) === req.user.id) {
       return res.status(400).json({ error: "No puedes desactivarte a ti mismo" });
     }
+    if (await esPropietario(empresa_id, id)) {
+      return res.status(403).json({ error: "No se puede desactivar al propietario de la empresa" });
+    }
 
     const result = await pool.query(
       `UPDATE persona
@@ -147,6 +172,9 @@ export const eliminarUsuario = async (req, res) => {
 
     if (Number(id) === req.user.id) {
       return res.status(400).json({ error: "No puedes eliminarte a ti mismo" });
+    }
+    if (await esPropietario(empresa_id, id)) {
+      return res.status(403).json({ error: "No se puede eliminar al propietario de la empresa" });
     }
 
     const { rows: [historial] } = await pool.query(
@@ -183,12 +211,12 @@ export const eliminarUsuario = async (req, res) => {
 };
 
 // =========================
-// GET ROLES — para el selector del formulario (sin SuperAdmin ni Cliente)
+// GET ROLES — para el selector del formulario (sin Cliente)
 // =========================
 export const getRoles = async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, nombre FROM roles WHERE id NOT IN (1, 4) ORDER BY id ASC`
+      `SELECT id, nombre FROM roles WHERE id <> 4 ORDER BY id ASC`
     );
     res.json(result.rows);
   } catch (error) {
@@ -211,12 +239,12 @@ export const getTodosRoles = async (req, res) => {
 };
 
 // =========================
-// CREAR ROL — permitido para SuperAdmin y Administrador
+// CREAR ROL — solo el Administrador
 // =========================
 export const crearRol = async (req, res) => {
   try {
     // ✅ Ahora también el Administrador puede crear roles
-    if (req.user.rol_id !== 1 && req.user.rol_id !== 2) {
+    if (req.user.rol_id !== 2) {
       return res.status(403).json({ error: "No tienes permisos para crear roles" });
     }
 
@@ -245,13 +273,13 @@ export const crearRol = async (req, res) => {
 export const eliminarRol = async (req, res) => {
   const client = await pool.connect();
   try {
-    if (req.user.rol_id !== 1 && req.user.rol_id !== 2) {
+    if (req.user.rol_id !== 2) {
       return res.status(403).json({ error: "No tienes permisos para eliminar roles" });
     }
 
     const { rol_id } = req.params;
 
-    if ([1, 2, 3, 4].includes(Number(rol_id))) {
+    if ([2, 3, 4].includes(Number(rol_id))) {
       return res.status(403).json({ error: "No se pueden eliminar los roles base del sistema" });
     }
 
@@ -303,7 +331,7 @@ export const getPermisosRol = async (req, res) => {
 export const actualizarPermisosRol = async (req, res) => {
   const client = await pool.connect();
   try {
-    if (req.user.rol_id !== 1 && req.user.rol_id !== 2) {
+    if (req.user.rol_id !== 2) {
       return res.status(403).json({ error: "No tienes permisos para modificar roles" });
     }
 
@@ -311,7 +339,7 @@ export const actualizarPermisosRol = async (req, res) => {
     const { secciones } = req.body; // array de strings
 
     // No permitir modificar roles base
-    if ([1, 2, 3, 4].includes(Number(rol_id))) {
+    if ([2, 3, 4].includes(Number(rol_id))) {
       return res.status(403).json({ error: "No se pueden modificar los permisos de roles base" });
     }
 

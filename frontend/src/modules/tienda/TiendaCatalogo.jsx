@@ -4,6 +4,7 @@ import TiendaLayout from "./components/TiendaLayout";
 import { useTiendaEmpresa } from "./hooks/useTiendaEmpresa";
 import CatalogoGrid from "./components/CatalogoGrid";
 import Carrito from "./components/Carrito";
+import PedidoConfirmado from "./components/PedidoConfirmado";
 import ModalReseñas from "../../modules/reseñas/components/ModalReseñas";
 import Estrellas from "../../modules/reseñas/components/Estrellas";
 import { getReseñasProducto } from "../../modules/reseñas/services/reseñasService";
@@ -94,11 +95,8 @@ useEffect(() => {
     return () => { activo = false; };
   }, [clavesProductos]);
 
-  // 2️⃣ Navigate a la ruta correcta con slug
-  const handlePagoExitoso = () => {
-    vaciarCarrito();
-    navigate(`/tienda/${empresaSlug}/pedidos`);
-  };
+  // Ir a "Mis pedidos" solo cuando el cliente lo pide (ya no se redirige solo al comprar)
+  const irAPedidos = () => navigate(`/tienda/${empresaSlug}/pedidos`, { state: { empresa } });
 
   const productosConPrecio = productos.map((p) => ({
     ...p,
@@ -232,7 +230,10 @@ useEffect(() => {
         estaLogueado={estaLogueado}
         empresaId={empresaId}
         empresaNombre={empresaNombre}
-        onPagoExitoso={handlePagoExitoso}
+        onPagoExitoso={vaciarCarrito}
+        onVerPedidos={irAPedidos}
+        colorMarca={colorMarca}
+        colorSecundario={empresa?.color_secundario || "#0B1628"}
       />
 
       {/* Modal reseñas */}
@@ -246,33 +247,14 @@ useEffect(() => {
 
       {/* 3️⃣ Modal con navigate correcto */}
       {pedidoExitoso && (
-        <div style={s.modalOverlay}>
-          <div style={s.modal}>
-            <div style={s.modalIcon}>
-              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#0F6E56" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M20 6L9 17l-5-5"/>
-              </svg>
-            </div>
-            <h2 style={s.modalTitle}>¡Pedido enviado!</h2>
-            <p style={s.modalDesc}>
-              Tu pedido <strong>#{pedidoExitoso.id}</strong> fue recibido.
-              Te contactarán pronto.
-            </p>
-            <p style={s.modalTotal}>
-              Total: <strong>${pedidoExitoso.total.toLocaleString("es-CO")}</strong>
-            </p>
-            <button style={{ ...s.modalBtn, backgroundColor: colorMarca }} onClick={() => {
-              cerrarExito();
-              navigate(`/tienda/${empresaSlug}/pedidos`);
-            }}>
-              Ver mis pedidos
-            </button>
-            <button style={s.modalBtnSecondary}
-              onClick={() => { cerrarExito(); navigate(`/tienda/${empresaSlug}/catalogo`, { state: { empresa } }); }}>
-              Seguir comprando
-            </button>
-          </div>
-        </div>
+        <PedidoConfirmado
+          pedido={pedidoExitoso}
+          empresaNombre={empresaNombre}
+          colorMarca={colorMarca}
+          colorSecundario={empresa?.color_secundario || "#0B1628"}
+          onSeguirComprando={cerrarExito}
+          onVerPedidos={() => { cerrarExito(); irAPedidos(); }}
+        />
       )}
 
     </TiendaLayout>

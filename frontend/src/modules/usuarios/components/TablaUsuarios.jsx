@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Pencil, Pause, Play, Trash2, Users } from "lucide-react";
 
 const ROLES = {
-  1: { label: "SuperAdmin",    color: "#dc2626", bg: "#fef2f2" },
   2: { label: "Administrador", color: "#1d4ed8", bg: "#eff6ff" },
   3: { label: "Empleado",      color: "#15803d", bg: "#f0fdf4" },
   4: { label: "Cliente",       color: "#7c3aed", bg: "#f5f3ff" },
@@ -65,6 +64,11 @@ export default function TablaUsuarios({ usuarios, onEditar, onToggle, onEliminar
                     <span style={{ ...s.rolBadge, backgroundColor: rol.bg, color: rol.color }}>
                       {rol.label}
                     </span>
+                    {u.es_propietario && (
+                      <span style={{ ...s.rolBadge, marginLeft: 6, backgroundColor: "#fffbeb", color: "#b45309", border: "1px solid #fde68a" }}>
+                        Propietario
+                      </span>
+                    )}
                   </td>
 
                   {/* Estado */}
@@ -88,6 +92,7 @@ export default function TablaUsuarios({ usuarios, onEditar, onToggle, onEliminar
                           <button style={s.btnAction} onClick={() => onEditar(u)} title="Editar">
                             <Pencil size={14} color="#2563eb" />
                           </button>
+                          {!u.es_propietario && (<>
                           <button
                             style={{ ...s.btnAction, ...(activo ? s.btnDesactivar : s.btnActivar) }}
                             onClick={() => onToggle(u.id)}
@@ -101,6 +106,7 @@ export default function TablaUsuarios({ usuarios, onEditar, onToggle, onEliminar
                           <button style={{ ...s.btnAction, ...s.btnDeleteStyle }} onClick={() => setPendingDeleteId(u.id)} title="Eliminar">
                             <Trash2 size={14} color="#dc2626" />
                           </button>
+                          </>)}
                         </>
                       )}
                     </div>

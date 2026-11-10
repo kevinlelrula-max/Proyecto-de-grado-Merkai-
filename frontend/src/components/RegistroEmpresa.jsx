@@ -35,7 +35,7 @@ export default function RegistroEmpresa() {
     admin_nombre: "", admin_apellido: "", admin_usuario: "",
     admin_contrasena: "", admin_telefono: "", admin_direccion: "",
     admin_tipo_documento: "Cédula de ciudadanía",
-    admin_numero_documento: "", admin_rol_id: 1, admin_id_municipio: "",
+    admin_numero_documento: "", admin_rol_id: 2, admin_id_municipio: "",
     _departamento: "",
   });
 

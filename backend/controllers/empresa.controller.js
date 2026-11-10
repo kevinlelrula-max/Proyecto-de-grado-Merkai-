@@ -107,13 +107,17 @@ export const registrarEmpresa = async (req, res) => {
         telefono, direccion, tipo_documento,
         numero_documento, rol_id, id_municipio
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,1,$10)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,2,$10)
       RETURNING *`,
       [empresa.id, nombre_admin, apellido_admin, usuario, hashedPassword,
        telefono_admin, direccion, tipo_documento, numero_documento, id_municipio]
     );
 
     const admin = usuarioResult.rows[0];
+
+    // Quien registra la empresa es su propietario (protegido frente a otros administradores)
+    await client.query("UPDATE empresas SET propietario_id = $1 WHERE id = $2", [admin.id, empresa.id]);
+
     const token = generarToken({ id: admin.id, empresa_id: admin.empresa_id, rol_id: admin.rol_id });
 
     await client.query("COMMIT");
@@ -298,11 +302,9 @@ export const crearTiendaAdicional = async (req, res) => {
     );
     const empresa = empresaResult.rows[0];
 
-    // Obtener rol_id actual del usuario
-    const personaResult = await client.query(
-      "SELECT rol_id FROM persona WHERE id = $1", [persona_id]
-    );
-    const rol_id = personaResult.rows[0]?.rol_id || 1;
+    // Quien crea una tienda nueva es su propietario y Administrador en ella
+    const rol_id = 2;
+    await client.query("UPDATE empresas SET propietario_id = $1 WHERE id = $2", [persona_id, empresa.id]);
 
     // Vincular usuario a la nueva empresa
     await client.query(

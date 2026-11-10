@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { getProductos } from "../productos/services/productos.api";
 import { crearVenta } from "./services/pos.api";
+import { getSesionActiva } from "./services/caja.api";
 import { crearCliente } from "../clientes/services/clientes.api";
 import { getDepartamentos, getMunicipios } from "../ubicacion/services/ubicacion.api";
 import { decodeToken } from "../../utils/auth";
@@ -30,6 +31,15 @@ export default function PuntoDeVenta() {
   const [ticketVenta, setTicketVenta] = useState(null);
   const [modalEfectivo, setModalEfectivo] = useState(false);
   const [pagoRecibido, setPagoRecibido] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const enviandoRef = useRef(false); // bloqueo inmediato (el estado de React tarda un render en cambiar)
+
+  // Estado de la caja: null = consultando, true/false = abierta/cerrada. Sin caja abierta no se vende.
+  const [cajaAbierta, setCajaAbierta] = useState(null);
+  const refrescarCaja = () =>
+    getSesionActiva()
+      .then((s) => setCajaAbierta(!!s))
+      .catch(() => setCajaAbierta((prev) => prev ?? false));
 
   const {
     carrito,
@@ -86,10 +96,18 @@ export default function PuntoDeVenta() {
   const [departamentos, setDepartamentos] = useState([]);
   const [municipios, setMunicipios] = useState([]);
 
-  useEffect(() => {
+  const cargarProductos = () =>
     getProductos(token).then(data => setProductos(data.filter(p => p.activo !== false)));
+
+  useEffect(() => {
+    cargarProductos();
     getDepartamentos().then(setDepartamentos);
   }, []);
+
+  // Al volver a la pestaña de venta (por ejemplo después de abrir o cerrar la caja) se vuelve a consultar
+  useEffect(() => {
+    if (pestana === "venta") refrescarCaja();
+  }, [pestana]);
 
   const handleDepartamentoChange = async (id) => {
     setNuevoCliente({
@@ -154,6 +172,10 @@ export default function PuntoDeVenta() {
   };
 
   const handleConfirmarClick = () => {
+    if (cajaAbierta === false) {
+      toast.warning("La caja está cerrada. Ábrela en la pestaña Caja para vender.");
+      return;
+    }
     if (metodoPago === 1) {
       setPagoRecibido("");
       setModalEfectivo(true);
@@ -171,7 +193,9 @@ export default function PuntoDeVenta() {
   const confirmarVenta = async () => {
     if (!clienteSeleccionado) { toast.warning("Selecciona un cliente"); return; }
     if (!carrito.length) { toast.warning("El carrito está vacío"); return; }
-
+    if (enviandoRef.current) return; // evita registrar la venta dos veces con doble clic
+    enviandoRef.current = true;
+    setEnviando(true);
     try {
       const res = await crearVenta(
         {
@@ -206,6 +230,12 @@ export default function PuntoDeVenta() {
 
     } catch (error) {
       toast.error(error.response?.data?.error || "Error al registrar la venta");
+    } finally {
+      enviandoRef.current = false;
+      setEnviando(false);
+      // El stock y el estado de la caja pueden haber cambiado (venta hecha o rechazada por falta de stock/caja)
+      cargarProductos();
+      refrescarCaja();
     }
   };
 
@@ -245,6 +275,15 @@ export default function PuntoDeVenta() {
             />
 
             <div className="pos-right">
+
+              {cajaAbierta === false && (
+                <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c", borderRadius: 10, padding: "10px 14px", margin: "0 0 10px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                  <span>La caja está cerrada: no se pueden registrar ventas.</span>
+                  <button onClick={() => setPestana("caja")} style={{ background: "#dc2626", color: "#fff", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    Abrir caja
+                  </button>
+                </div>
+              )}
 
               <div className="pos-right-header">
 
@@ -299,9 +338,9 @@ export default function PuntoDeVenta() {
                 <button
                   className="btn-confirmar"
                   onClick={handleConfirmarClick}
-                  disabled={!carrito.length || !clienteSeleccionado}
+                  disabled={!carrito.length || !clienteSeleccionado || cajaAbierta === false || enviando}
                 >
-                  Confirmar venta
+                  {enviando ? "Registrando..." : "Confirmar venta"}
                 </button>
 
               </div>
@@ -392,7 +431,8 @@ export default function PuntoDeVenta() {
 }
 
 // ── Modal de ticket de impresión ─────────────────────────────────────────────
-const METODOS = { 1: "Efectivo", 2: "Tarjeta", 3: "Transferencia", 4: "Nequi / Daviplata" };
+// Mismos ids que los botones de MetodoPago.jsx y la tabla metodo_pago
+const METODOS = { 1: "Efectivo", 2: "Transferencia", 3: "Nequi", 4: "Tarjeta" };
 
 function ModalTicket({ venta, empresa, onClose, fmt }) {
   const handlePrint = () => window.print();

@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { decodeToken, tokenVigente } from "../utils/auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
-const ROLES_ADMIN = [1, 2]; // SuperAdmin y Administrador tienen acceso a todas las secciones
+const ROLES_ADMIN = [2]; // El Administrador tiene acceso a todas las secciones
 
 // `seccion` (opcional): además de la sesión exige que el rol tenga esa sección en rol_permisos,
 // la misma fuente que arma el menú del panel. El servidor la vuelve a validar en cada petición.

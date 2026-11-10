@@ -17,7 +17,7 @@ const JWT_SECRET = "test_secret";
 process.env.JWT_SECRET = JWT_SECRET;
 
 const tokenValido = jwt.sign(
-  { id: 1, empresa_id: 1, rol_id: 1 },
+  { id: 1, empresa_id: 1, rol_id: 2 },
   JWT_SECRET,
   { expiresIn: "1h" }
 );

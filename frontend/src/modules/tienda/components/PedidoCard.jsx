@@ -44,7 +44,7 @@ function useHistorial(pedidoId) {
   return { historial, abierto, loading, cargar };
 }
 
-export default function PedidoCard({ pedido }) {
+export default function PedidoCard({ pedido, colorMarca = "#2563eb" }) {
   const navigate = useNavigate();
   const { historial, abierto, loading, cargar } = useHistorial(pedido.id);
 
@@ -75,7 +75,7 @@ export default function PedidoCard({ pedido }) {
     <div style={{ ...s.card, borderLeft: `4px solid ${estado.color}` }}>
 
       {/* Header: número + status */}
-      <div style={s.header}>
+      <div style={{ ...s.header, backgroundColor: `${colorMarca}0d` }}>
         <div style={s.headerLeft}>
           <div style={s.pedidoId}>Pedido #{pedido.id}</div>
           <div style={s.fecha}>{fecha}</div>
@@ -108,7 +108,7 @@ export default function PedidoCard({ pedido }) {
               const activo   = i <= indexActual;
               const esActual = e === pedido.estado;
               const StepIcon = ESTADO_ICONS[e] || Clock;
-              const stepColor = activo ? (ESTADOS[e]?.color ?? "#2563eb") : "#cbd5e1";
+              const stepColor = activo ? (ESTADOS[e]?.color ?? colorMarca) : "#cbd5e1";
 
               return (
                 <div key={e} style={s.trackerStep}>
@@ -116,7 +116,7 @@ export default function PedidoCard({ pedido }) {
                   {i > 0 && (
                     <div style={{
                       ...s.trackerLine,
-                      backgroundColor: pasado ? (ESTADOS[PASOS[i]]?.color ?? "#2563eb") : "#e2e8f0",
+                      backgroundColor: pasado ? (ESTADOS[PASOS[i]]?.color ?? colorMarca) : "#e2e8f0",
                     }} />
                   )}
 
@@ -140,7 +140,7 @@ export default function PedidoCard({ pedido }) {
                   {i < 4 && (
                     <div style={{
                       ...s.trackerLine,
-                      backgroundColor: i < indexActual ? (ESTADOS[PASOS[i + 1]]?.color ?? "#2563eb") : "#e2e8f0",
+                      backgroundColor: i < indexActual ? (ESTADOS[PASOS[i + 1]]?.color ?? colorMarca) : "#e2e8f0",
                     }} />
                   )}
                 </div>
@@ -183,8 +183,8 @@ export default function PedidoCard({ pedido }) {
         </div>
         {pedido.detalle?.map((item, i) => (
           <div key={i} style={s.productoItem}>
-            <div style={s.productoIconWrap}>
-              <Package size={12} color="#2563eb" />
+            <div style={{ ...s.productoIconWrap, backgroundColor: `${colorMarca}14` }}>
+              <Package size={12} color={colorMarca} />
             </div>
             <span style={s.productoNombre}>{item.nombre}</span>
             <span style={s.productoCantidad}>
@@ -270,7 +270,7 @@ export default function PedidoCard({ pedido }) {
       {/* Repetir pedido */}
       {pedido.estado === "entregado" && pedido.empresa_slug && (
         <div style={s.repetirRow}>
-          <button style={s.repetirBtn} onClick={repetirPedido}>
+          <button style={{ ...s.repetirBtn, color: colorMarca, borderColor: colorMarca }} onClick={repetirPedido}>
             <RotateCcw size={13} />
             Repetir este pedido
           </button>

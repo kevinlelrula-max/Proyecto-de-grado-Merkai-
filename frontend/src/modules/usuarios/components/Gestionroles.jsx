@@ -7,7 +7,7 @@ import {
 import { crearRol } from "../services/usuarios.api";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
-const ROLES_FIJOS = [1, 2, 3, 4];
+const ROLES_FIJOS = [2, 3, 4];
 
 const SECCIONES = [
   { key: "productos",     label: "Productos",      Icon: Package },
@@ -20,7 +20,6 @@ const SECCIONES = [
 ];
 
 const DESC_FIJOS = {
-  1: "Acceso total al sistema, todas las empresas y configuración global.",
   2: "Gestión completa: productos, ventas, clientes, reportes, usuarios y configuración.",
   3: "Punto de venta y atención a clientes.",
   4: "Vista de catálogo e historial de compras propias.",
@@ -36,10 +35,9 @@ const PALETA = [
 ];
 
 function puedeEditar(rolUsuario, rolId) {
-  if (rolId === 1) return false;
-  if (rolUsuario === 1) return true;
-  if (rolUsuario === 2 && rolId !== 2) return true;
-  return false;
+  // El Administrador es el rol máximo de la empresa y no se modifica; los demás los gestiona un Administrador
+  if (rolId === 2) return false;
+  return rolUsuario === 2;
 }
 
 export default function Gestionroles() {
@@ -144,7 +142,7 @@ export default function Gestionroles() {
         <div style={s.bannerBody}>
           <p style={s.bannerTitle}>Acceso por roles</p>
           <p style={s.bannerText}>
-            Cada rol define qué puede ver y hacer un miembro del equipo. El rol <strong>SuperAdmin</strong> está protegido y no se puede modificar.
+            Cada rol define qué puede ver y hacer un miembro del equipo. El rol <strong>Administrador</strong> tiene acceso total y no se puede modificar.
           </p>
         </div>
         {(rolUsuario === 1 || rolUsuario === 2) && (

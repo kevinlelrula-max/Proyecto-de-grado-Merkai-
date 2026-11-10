@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useCheckout }  from "../hooks/useCheckout";
 import CheckoutModal    from "./CheckoutModal";
 import EnvioForm        from "../../envio/components/EnvioForm";
@@ -30,6 +30,9 @@ export default function Carrito({
   empresaNombre,
   onPedidoCreado,
   onPagoExitoso,
+  onVerPedidos,
+  colorMarca = "#3674B5",
+  colorSecundario = "#0B1628",
 }) {
   const [costoEnvio, setCostoEnvio] = useState(0);
   const [departamentoId, setDepartamentoId] = useState(null);
@@ -132,28 +135,9 @@ export default function Carrito({
 
   const usarStripe = tienePasarela && esMetodoTarjeta;
 
-  // Confirmación post-pedido para métodos manuales
-  const [pedidoExitoso, setPedidoExitoso] = useState(false);
-  const [metodoConfirmado, setMetodoConfirmado] = useState(null);
-  const prevLoadingPedido = useRef(false);
-
-  useEffect(() => {
-    if (prevLoadingPedido.current && !loadingPedido && !errorPedido && metodoConfirmado) {
-      setPedidoExitoso(true);
-    }
-    prevLoadingPedido.current = loadingPedido;
-  }, [loadingPedido, errorPedido]);
-
-  useEffect(() => {
-    if (!carritoAbierto) {
-      setPedidoExitoso(false);
-      setMetodoConfirmado(null);
-      prevLoadingPedido.current = false;
-    }
-  }, [carritoAbierto]);
-
+  // El aviso de pedido confirmado (métodos manuales) lo muestra la página con <PedidoConfirmado>;
+  // el de pago con tarjeta lo muestra CheckoutModal.
   const handleConfirmarPedido = () => {
-    setMetodoConfirmado(metodoSeleccionado?.metodo?.toLowerCase());
     confirmarPedido(totalConEnvio, cuponAplicado?.cupon_id || null, departamentoId, ubicacionTexto);
   };
 
@@ -170,9 +154,9 @@ export default function Carrito({
           <div style={s.headerLeft}>
             <div style={s.headerIconWrap}>
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M3 3h1.5l2.5 9h8l2-6H6" stroke="#3674B5" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                <circle cx="9" cy="16" r="1.2" fill="#3674B5"/>
-                <circle cx="14" cy="16" r="1.2" fill="#3674B5"/>
+                <path d="M3 3h1.5l2.5 9h8l2-6H6" stroke={colorMarca} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="9" cy="16" r="1.2" fill={colorMarca}/>
+                <circle cx="14" cy="16" r="1.2" fill={colorMarca}/>
               </svg>
             </div>
             <div>
@@ -190,21 +174,7 @@ export default function Carrito({
         {/* Contenido */}
         <div style={s.body}>
 
-          {pedidoExitoso ? (
-            /* Panel de confirmación post-pedido */
-            <div style={s.exitoPanel}>
-              <div style={s.exitoIconWrap}>
-                <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-                  <circle cx="28" cy="28" r="28" fill="#eff6ff"/>
-                  <path d="M16 28l10 10 14-20" stroke="#3674B5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <h3 style={s.exitoTitle}>Pedido confirmado</h3>
-              <p style={s.exitoInstrucciones}>{instruccionesPago(metodoConfirmado)}</p>
-              <button style={s.btnCerrarExito} onClick={() => setCarritoAbierto(false)}>Cerrar</button>
-            </div>
-
-          ) : carrito.length === 0 ? (
+          {carrito.length === 0 ? (
             /* Estado vacío */
             <div style={s.empty}>
               <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
@@ -295,24 +265,24 @@ export default function Carrito({
                 )}
                 {envioGratisRef && costoEnvio > 0 && (
                   <div style={s.subtotalRow}>
-                    <span style={{ ...s.subtotalLabel, color: "#3674B5" }}>Envío</span>
-                    <span style={{ ...s.subtotalValor, color: "#3674B5", fontWeight: "700" }}>Gratis</span>
+                    <span style={{ ...s.subtotalLabel, color: colorMarca }}>Envío</span>
+                    <span style={{ ...s.subtotalValor, color: colorMarca, fontWeight: "700" }}>Gratis</span>
                   </div>
                 )}
                 {tieneDescuentoRef && descuentoRefMonto > 0 && (
                   <div style={s.subtotalRow}>
-                    <span style={{ ...s.subtotalLabel, color: "#3674B5" }}>
+                    <span style={{ ...s.subtotalLabel, color: colorMarca }}>
                       Descuento referido ({descuentoRefPct}%)
                     </span>
-                    <span style={{ ...s.subtotalValor, color: "#3674B5", fontWeight: "700" }}>
+                    <span style={{ ...s.subtotalValor, color: colorMarca, fontWeight: "700" }}>
                       −${descuentoRefMonto.toLocaleString("es-CO")}
                     </span>
                   </div>
                 )}
                 {descuentoCupon > 0 && (
                   <div style={s.subtotalRow}>
-                    <span style={{ ...s.subtotalLabel, color: "#3674B5" }}>Cupón {cuponAplicado?.codigo}</span>
-                    <span style={{ ...s.subtotalValor, color: "#3674B5", fontWeight: "700" }}>
+                    <span style={{ ...s.subtotalLabel, color: colorMarca }}>Cupón {cuponAplicado?.codigo}</span>
+                    <span style={{ ...s.subtotalValor, color: colorMarca, fontWeight: "700" }}>
                       −${descuentoCupon.toLocaleString("es-CO")}
                     </span>
                   </div>
@@ -345,9 +315,9 @@ export default function Carrito({
                           key={m.id}
                           style={{
                             ...s.metodoBtn,
-                            backgroundColor: metodoPagoId === m.id ? "#eff6ff" : "white",
-                            borderColor:     metodoPagoId === m.id ? "#3674B5" : "#e2e8f0",
-                            color:           metodoPagoId === m.id ? "#3674B5" : "#334155",
+                            backgroundColor: metodoPagoId === m.id ? `${colorMarca}14` : "white",
+                            borderColor:     metodoPagoId === m.id ? colorMarca : "#e2e8f0",
+                            color:           metodoPagoId === m.id ? colorMarca : "#334155",
                             fontWeight:      metodoPagoId === m.id ? "700" : "500",
                           }}
                           onClick={() => setMetodoPagoId(m.id)}
@@ -380,7 +350,7 @@ export default function Carrito({
 
                 {usarStripe ? (
                   <button
-                    style={{ ...s.btnConfirmar, background: "#3674B5" }}
+                    style={{ ...s.btnConfirmar, background: colorMarca }}
                     onClick={abrirCheckout}
                     disabled={!direccion.trim() || loadingIntent || faltaDepartamento}
                   >
@@ -388,7 +358,7 @@ export default function Carrito({
                   </button>
                 ) : (
                   <button
-                    style={{ ...s.btnConfirmar, opacity: loadingPedido || faltaDepartamento ? 0.6 : 1, cursor: loadingPedido || faltaDepartamento ? "not-allowed" : "pointer" }}
+                    style={{ ...s.btnConfirmar, backgroundColor: colorMarca, opacity: loadingPedido || faltaDepartamento ? 0.6 : 1, cursor: loadingPedido || faltaDepartamento ? "not-allowed" : "pointer" }}
                     onClick={handleConfirmarPedido}
                     disabled={loadingPedido || faltaDepartamento}
                   >
@@ -422,18 +392,16 @@ export default function Carrito({
         totalPrecio={montoPedido ?? totalConEnvio}
         carrito={carrito}
         empresaNombre={empresaNombre}
+        colorMarca={colorMarca}
+        colorSecundario={colorSecundario}
+        direccion={direccionCompleta}
+        metodo={metodoSeleccionado?.metodo}
         onPagoExitoso={onPagoExitoso}
+        onVerPedidos={onVerPedidos}
+        onCerrarCarrito={() => setCarritoAbierto(false)}
       />
     </>
   );
-}
-
-function instruccionesPago(metodo) {
-  if (metodo === "nequi")
-    return "Envía el monto exacto al número de Nequi registrado por el negocio. Tu pedido se activará una vez confirmemos la transferencia.";
-  if (metodo === "transferencia")
-    return "Realiza la transferencia bancaria a la cuenta del negocio y comparte el comprobante. Tu pedido se activará una vez confirmemos el pago.";
-  return "Tu pedido quedó registrado y está pendiente de pago. El negocio se pondrá en contacto contigo para coordinar el cobro.";
 }
 
 function capitalize(str) {
@@ -458,13 +426,6 @@ const s = {
   empty:        { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px", padding: "60px 0" },
   emptyTitle:   { fontSize: "15px", fontWeight: "600", color: "#334155", margin: 0 },
   emptyDesc:    { fontSize: "13px", color: "#334155", margin: 0 },
-
-  // Éxito post-pedido
-  exitoPanel:        { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "14px", padding: "40px 20px", textAlign: "center" },
-  exitoIconWrap:     { marginBottom: "4px" },
-  exitoTitle:        { fontSize: "18px", fontWeight: "700", color: "#0f172a", margin: 0 },
-  exitoInstrucciones:{ fontSize: "13px", color: "#334155", lineHeight: "1.6", maxWidth: "300px", margin: 0 },
-  btnCerrarExito:    { marginTop: "8px", padding: "12px 28px", backgroundColor: "#3674B5", color: "white", border: "none", borderRadius: "10px", fontSize: "14px", fontWeight: "600", cursor: "pointer" },
 
   // Items
   items:        { display: "flex", flexDirection: "column", gap: "10px" },

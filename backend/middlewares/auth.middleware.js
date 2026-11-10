@@ -32,9 +32,9 @@ export const verificarToken = async (req, res, next) => {
   next();
 };
 
-// Autorización por sección: SuperAdmin y Administrador tienen acceso total; el resto de roles
+// Autorización por sección: el Administrador tiene acceso total; el resto de roles
 // necesita la sección en rol_permisos (la misma tabla que arma el menú del panel).
-const ROLES_ADMIN = [1, 2];
+const ROLES_ADMIN = [2];
 
 export const requierePermiso = (...secciones) => async (req, res, next) => {
   if (ROLES_ADMIN.includes(req.user?.rol_id)) return next();

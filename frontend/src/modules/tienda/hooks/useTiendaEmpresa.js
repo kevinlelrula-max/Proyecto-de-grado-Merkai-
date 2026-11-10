@@ -264,7 +264,12 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
 
       if (res.id) {
         localStorage.setItem("cliente_direccion", direccion);
-        setPedidoExitoso({ id: res.id, total: res.total ?? totalFinal });
+        setPedidoExitoso({
+          id:        res.id,
+          total:     res.total ?? totalFinal,
+          metodo:    metodosPago.find((m) => m.id === metodoPagoId)?.metodo || null,
+          direccion: payload.direccion_entrega,
+        });
         vaciarCarrito();
         setCarritoAbierto(false);
         // Marcar carrito como convertido
@@ -282,15 +287,15 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
       setLoadingPedido(false);
     }
   }, [
-    carrito, direccion, metodoPagoId,
+    carrito, direccion, metodoPagoId, metodosPago,
     empresaId, totalPrecio,
     notas, navigate, location.pathname, vaciarCarrito,
   ]);
 
+  // Solo cierra el aviso: a dónde ir después lo decide el cliente (seguir comprando o ver pedidos)
   const cerrarExito = useCallback(() => {
     setPedidoExitoso(null);
-    navigate("/tienda/mis-pedidos");
-  }, [navigate]);
+  }, []);
 
   return {
     // Empresa

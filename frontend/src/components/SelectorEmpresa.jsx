@@ -8,7 +8,7 @@ const AVATAR_COLORS = [
   "bg-indigo-500","bg-lime-500",
 ];
 const avatarColor = (id) => AVATAR_COLORS[id % AVATAR_COLORS.length];
-const rolLabel    = (r)  => r === 1 ? "SuperAdmin" : r === 2 ? "Administrador" : "Empleado";
+const rolLabel    = (r)  => r === 2 ? "Administrador" : "Empleado";
 
 export default function SelectorEmpresa({ empresas, token, rolId = 1, onSelect, onClose }) {
   const [vista,   setVista]   = useState("lista");
@@ -78,7 +78,7 @@ export default function SelectorEmpresa({ empresas, token, rolId = 1, onSelect, 
           </div>
 
           <div className="flex items-center gap-2">
-            {(rolId === 1 || rolId === 2) && vista === "lista" && (
+            {rolId === 2 && vista === "lista" && (
               <button
                 onClick={() => { setVista("crear"); setError(""); }}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-700 text-white text-sm font-semibold transition-colors"

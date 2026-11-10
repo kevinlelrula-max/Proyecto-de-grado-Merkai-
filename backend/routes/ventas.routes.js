@@ -10,8 +10,8 @@ import { verificarToken, requierePermiso } from "../middlewares/auth.middleware.
 
 const router = Router();
 
-// Crear venta (cliente o POS)
-router.post("/", verificarToken, crearVenta);
+// Crear venta en el punto de venta (requiere acceso al POS)
+router.post("/", verificarToken, requierePermiso("pos", "ventas"), crearVenta);
 
 // Ventas de la empresa logueada
 router.get("/empresa", verificarToken, requierePermiso("ventas", "pos"), listarVentasEmpresa);

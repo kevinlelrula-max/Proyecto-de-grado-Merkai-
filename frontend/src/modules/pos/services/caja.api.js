@@ -11,6 +11,7 @@ function authHeaders() {
 export async function getSesionActiva() {
   const res = await fetch(`${BASE_URL}/api/caja/activa`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Error al obtener sesión activa");
+  // null cuando no hay caja abierta; si hay, trae el resumen en vivo (ventas, efectivo esperado…)
   return res.json();
 }
 
@@ -31,11 +32,12 @@ export async function abrirCaja(monto_apertura) {
   return data;
 }
 
-export async function cerrarCaja(sesion_id, monto_cierre, observaciones) {
+// El monto de cierre lo calcula el servidor (apertura + ventas en efectivo − devoluciones en efectivo)
+export async function cerrarCaja(sesion_id, observaciones) {
   const res = await fetch(`${BASE_URL}/api/caja/cerrar`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ sesion_id, monto_cierre: Number(monto_cierre), observaciones }),
+    body: JSON.stringify({ sesion_id, observaciones }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Error al cerrar caja");

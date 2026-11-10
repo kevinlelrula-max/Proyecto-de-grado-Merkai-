@@ -562,7 +562,7 @@ export default function DashboardEmpresa() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const rolLabel = rolId === 1 ? "SuperAdmin" : rolId === 2 ? "Administrador" : rolId === 3 ? "Empleado" : "Usuario";
+  const rolLabel = rolId === 2 ? "Administrador" : rolId === 3 ? "Empleado" : "Usuario";
   const inicial  = nombreUsuario.charAt(0).toUpperCase();
 
   if (cargandoPermisos) {
@@ -797,7 +797,7 @@ export default function DashboardEmpresa() {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
                     Mi perfil
                   </button>
-                  {(rolId === 1 || rolId === 2) && (
+                  {rolId === 2 && (
                     <button
                       className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-[#3D5068] hover:bg-slate-50 hover:text-[#0B1628] transition-colors bg-transparent border-none w-full text-left cursor-pointer"
                       onClick={() => { setOpen(false); irA("configuracion"); }}
@@ -806,7 +806,7 @@ export default function DashboardEmpresa() {
                       Configuración
                     </button>
                   )}
-                  {(rolId === 1 || rolId === 2) && (
+                  {rolId === 2 && (
                     <button
                       className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-[#3D5068] hover:bg-slate-50 hover:text-[#0B1628] transition-colors bg-transparent border-none w-full text-left cursor-pointer"
                       onClick={() => { setOpen(false); setShowSwitcher(true); }}

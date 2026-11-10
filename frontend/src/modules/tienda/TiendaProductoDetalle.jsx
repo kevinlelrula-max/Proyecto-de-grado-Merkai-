@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import TiendaLayout from "./components/TiendaLayout";
 import Carrito from "./components/Carrito";
+import PedidoConfirmado from "./components/PedidoConfirmado";
 import { useTiendaEmpresa } from "./hooks/useTiendaEmpresa";
 import Estrellas from "../reseñas/components/Estrellas";
 import { getReseñasProducto } from "../reseñas/services/reseñasService";
@@ -54,11 +55,12 @@ export default function TiendaProductoDetalle() {
     metodosPago, metodoPagoId, setMetodoPagoId,
     direccion, setDireccion, notas, setNotas,
     loadingPedido, errorPedido, setErrorPedido,
-    pedidoExitoso, confirmarPedido,
+    pedidoExitoso, confirmarPedido, cerrarExito,
   } = useTiendaEmpresa(empresaId, empresaSlug);
 
   const empresa    = empresaState || empresaData;
   const colorMarca = empresa?.color_primario || "#0F6E56";
+  const irAPedidos = () => navigate(`/tienda/${empresaSlug}/pedidos`, { state: { empresa } });
 
   const producto     = productos.find(p => String(p.id) === String(productoId));
   const relacionados = productos
@@ -471,8 +473,22 @@ export default function TiendaProductoDetalle() {
         estaLogueado={!!localStorage.getItem("cliente_token")}
         empresaId={empresaId}
         empresaNombre={empresa?.nombre}
-        onPagoExitoso={() => { vaciarCarrito(); navigate(`/tienda/${empresaSlug}/pedidos`); }}
+        onPagoExitoso={vaciarCarrito}
+        onVerPedidos={irAPedidos}
+        colorMarca={colorMarca}
+        colorSecundario={empresa?.color_secundario || "#0B1628"}
       />
+
+      {pedidoExitoso && (
+        <PedidoConfirmado
+          pedido={pedidoExitoso}
+          empresaNombre={empresa?.nombre}
+          colorMarca={colorMarca}
+          colorSecundario={empresa?.color_secundario || "#0B1628"}
+          onSeguirComprando={cerrarExito}
+          onVerPedidos={() => { cerrarExito(); irAPedidos(); }}
+        />
+      )}
     </TiendaLayout>
   );
 }
