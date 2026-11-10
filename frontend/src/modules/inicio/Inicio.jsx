@@ -33,6 +33,15 @@ export default function Inicio({ onIrA }) {
 
   const [forzarDashboard, setForzarDashboard] = useState(false);
   const [mostrarQR, setMostrarQR]             = useState(false);
+  const [copiado, setCopiado]                 = useState(false);
+
+  const copiarEnlace = async () => {
+    try {
+      await navigator.clipboard.writeText(linkTienda);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch { /* el navegador bloqueó el portapapeles: el enlace sigue visible para copiarlo a mano */ }
+  };
 
   const mostrarOnboarding = !esOnboardingCompleto && !forzarDashboard;
   const slug              = localStorage.getItem("empresa_slug") || "";
@@ -82,6 +91,28 @@ export default function Inicio({ onIrA }) {
           </a>
         )}
       </div>
+
+      {/* Enlace público de la tienda: es el que se comparte en redes, mensajes o pósters */}
+      {linkTienda && (
+        <div className="flex items-center gap-2.5 flex-wrap bg-white border border-slate-200 rounded-xl px-4 py-3">
+          <div className="flex-1 min-w-[220px]">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Enlace de tu tienda</p>
+            <p className="text-sm font-semibold text-slate-800 break-all select-all">{linkTienda}</p>
+          </div>
+          <button
+            onClick={copiarEnlace}
+            className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer"
+          >
+            {copiado ? "¡Copiado!" : "Copiar enlace"}
+          </button>
+          <button
+            onClick={() => setMostrarQR(true)}
+            className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 cursor-pointer"
+          >
+            Código QR
+          </button>
+        </div>
+      )}
 
       {mostrarOnboarding ? (
         <OnboardingCard

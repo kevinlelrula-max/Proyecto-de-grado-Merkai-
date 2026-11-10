@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cerrarSesionCliente } from "../utils/auth";
 import { useNavigate, Link } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { loginEmpresa, loginGoogleEmpresa } from "../services/api";
@@ -13,7 +14,7 @@ export default function LoginEmpresa() {
   const [error, setError]             = useState("");
   const [misEmpresas, setMisEmpresas] = useState(null);
   const [tempToken, setTempToken]     = useState(null);
-  const [tempRolId, setTempRolId]     = useState(1);
+  const [tempRolId, setTempRolId]     = useState(2);
 
   const handleChange = (e) => {
     setError("");
@@ -21,6 +22,7 @@ export default function LoginEmpresa() {
   };
 
   const guardarSesion = (data) => {
+    cerrarSesionCliente(); // al entrar al panel no debe quedar abierta la cuenta de un cliente
     localStorage.setItem("token",           data.token);
     localStorage.setItem("empresa_id",      data.empresa_id);
     localStorage.setItem("rol_id",          data.rol_id);

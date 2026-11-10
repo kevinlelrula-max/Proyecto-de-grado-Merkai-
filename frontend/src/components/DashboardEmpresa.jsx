@@ -4,7 +4,7 @@ import BuscadorGlobal from "./BuscadorGlobal";
 import PersonalizarColor, { useAcento } from "./PersonalizarColor";
 import SelectorEmpresa from "./SelectorEmpresa";
 import { cn } from "@/lib/utils";
-import { decodeToken } from "../utils/auth";
+import { decodeToken, cerrarSesionCliente } from "../utils/auth";
 
 import Inicio from "../modules/inicio/Inicio";
 import Productos from "../modules/productos/Productos";
@@ -429,6 +429,9 @@ export default function DashboardEmpresa() {
   const decoded       = decodeToken(token);
   const rolId         = decoded?.rol_id || 3;
   const nombreUsuario = decoded?.usuario || "Usuario";
+
+  // Quien está en el panel no debe ver la tienda con la cuenta de un cliente abierta
+  useEffect(() => { cerrarSesionCliente(); }, []);
 
   useAcento();
 
