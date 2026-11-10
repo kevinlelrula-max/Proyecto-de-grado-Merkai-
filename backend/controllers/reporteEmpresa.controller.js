@@ -596,8 +596,10 @@ export const getResumenInicio = async (req, res) => {
         [empresa_id]
       ).catch(() => ({ rows: [{ total: 0 }] })),
       pool.query(
+        // Equipo = personal (no clientes) distinto del propietario de la empresa
         `SELECT COUNT(*) AS total FROM persona
-         WHERE empresa_id = $1 AND rol_id != 1`,
+         WHERE empresa_id = $1 AND rol_id <> 4 AND activo IS NOT FALSE
+           AND id IS DISTINCT FROM (SELECT propietario_id FROM empresas WHERE id = $1)`,
         [empresa_id]
       ).catch(() => ({ rows: [{ total: 0 }] })),
       pool.query(

@@ -4,7 +4,7 @@ import BuscadorGlobal from "./BuscadorGlobal";
 import PersonalizarColor, { useAcento } from "./PersonalizarColor";
 import SelectorEmpresa from "./SelectorEmpresa";
 import { cn } from "@/lib/utils";
-import { decodeToken, cerrarSesionCliente } from "../utils/auth";
+import { decodeToken, cerrarSesionCliente, urlImagenEmpresa } from "../utils/auth";
 
 import Inicio from "../modules/inicio/Inicio";
 import Productos from "../modules/productos/Productos";
@@ -617,7 +617,7 @@ export default function DashboardEmpresa() {
           <div className="flex items-center gap-2.5">
             {logoUrl ? (
               <img
-                src={`${BASE_URL}${logoUrl}`}
+                src={urlImagenEmpresa(logoUrl, BASE_URL)}
                 alt="Logo"
                 className="w-9 h-9 rounded-[10px] object-contain bg-white p-0.5 flex-shrink-0"
               />

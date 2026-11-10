@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { urlImagenEmpresa } from "../utils/auth";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -128,7 +129,7 @@ export default function SelectorEmpresa({ empresas, token, rolId = 1, onSelect, 
                 >
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 text-white font-bold text-lg ${avatarColor(emp.id)}`}>
                     {emp.logo_url
-                      ? <img src={`${BASE_URL}${emp.logo_url}`} alt="" className="w-full h-full object-contain rounded-2xl"/>
+                      ? <img src={urlImagenEmpresa(emp.logo_url, BASE_URL)} alt="" className="w-full h-full object-contain rounded-2xl"/>
                       : emp.nombre.charAt(0).toUpperCase()
                     }
                   </div>

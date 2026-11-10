@@ -16,3 +16,10 @@ export function cerrarSesionCliente() {
   ["cliente_token", "cliente_id", "cliente_nombre", "cliente_rol", "cliente_empresa_id", "cliente_direccion"]
     .forEach((k) => localStorage.removeItem(k));
 }
+
+// Dirección completa de una imagen de la empresa (logo): puede venir como enlace completo
+// (https://...) o como ruta del servidor (/uploads/...).
+export function urlImagenEmpresa(url, baseUrl) {
+  if (!url) return "";
+  return /^https?:\/\//i.test(url) || url.startsWith("data:") ? url : `${baseUrl}${url}`;
+}
