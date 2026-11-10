@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aBogota } from "./fechas.js";
 
 export function registerVentasTools(server, pool, empresa_id) {
   server.tool(
@@ -19,13 +20,13 @@ export function registerVentasTools(server, pool, empresa_id) {
          FROM (
            SELECT COUNT(*) AS transacciones, COALESCE(SUM(total), 0) AS ingresos_total
            FROM ventas
-           WHERE empresa_id = $1 AND DATE(fecha) BETWEEN $2 AND $3
+           WHERE empresa_id = $1 AND ${aBogota("fecha")} BETWEEN $2 AND $3
            UNION ALL
            SELECT COUNT(*) AS transacciones, COALESCE(SUM(total), 0) AS ingresos_total
            FROM pedidos_online
            WHERE empresa_id = $1
              AND estado IN ('entregado', 'confirmado', 'en_preparacion', 'enviado')
-             AND DATE(fecha_pedido) BETWEEN $2 AND $3
+             AND ${aBogota("fecha_pedido")} BETWEEN $2 AND $3
          ) src`,
         [empresa_id, desde, hasta]
       );
@@ -64,14 +65,14 @@ export function registerVentasTools(server, pool, empresa_id) {
            SELECT dv.producto_id, dv.cantidad, dv.cantidad * dv.precio_unitario AS ingresos
            FROM detalle_venta dv
            JOIN ventas v ON v.id = dv.venta_id
-           WHERE v.empresa_id = $1 AND DATE(v.fecha) BETWEEN $2 AND $3
+           WHERE v.empresa_id = $1 AND ${aBogota("v.fecha")} BETWEEN $2 AND $3
            UNION ALL
            SELECT dp.producto_id, dp.cantidad, dp.cantidad * dp.precio_unitario AS ingresos
            FROM detalle_pedido_online dp
            JOIN pedidos_online po ON po.id = dp.pedido_id
            WHERE po.empresa_id = $1
              AND po.estado IN ('entregado','confirmado','en_preparacion','enviado')
-             AND DATE(po.fecha_pedido) BETWEEN $2 AND $3
+             AND ${aBogota("po.fecha_pedido")} BETWEEN $2 AND $3
          ) src
          JOIN productos p ON p.id = src.producto_id AND p.empresa_id = $1
          GROUP BY p.id, p.nombre
@@ -119,13 +120,13 @@ export function registerVentasTools(server, pool, empresa_id) {
           `SELECT SUM(transacciones) AS transacciones, COALESCE(SUM(ingresos), 0) AS ingresos
            FROM (
              SELECT COUNT(*) AS transacciones, COALESCE(SUM(total), 0) AS ingresos
-             FROM ventas WHERE empresa_id = $1 AND DATE(fecha) BETWEEN $2 AND $3
+             FROM ventas WHERE empresa_id = $1 AND ${aBogota("fecha")} BETWEEN $2 AND $3
              UNION ALL
              SELECT COUNT(*) AS transacciones, COALESCE(SUM(total), 0) AS ingresos
              FROM pedidos_online
              WHERE empresa_id = $1
                AND estado IN ('entregado', 'confirmado', 'en_preparacion', 'enviado')
-               AND DATE(fecha_pedido) BETWEEN $2 AND $3
+               AND ${aBogota("fecha_pedido")} BETWEEN $2 AND $3
            ) src`,
           [empresa_id, periodo1_desde, periodo1_hasta]
         ),
@@ -133,13 +134,13 @@ export function registerVentasTools(server, pool, empresa_id) {
           `SELECT SUM(transacciones) AS transacciones, COALESCE(SUM(ingresos), 0) AS ingresos
            FROM (
              SELECT COUNT(*) AS transacciones, COALESCE(SUM(total), 0) AS ingresos
-             FROM ventas WHERE empresa_id = $1 AND DATE(fecha) BETWEEN $2 AND $3
+             FROM ventas WHERE empresa_id = $1 AND ${aBogota("fecha")} BETWEEN $2 AND $3
              UNION ALL
              SELECT COUNT(*) AS transacciones, COALESCE(SUM(total), 0) AS ingresos
              FROM pedidos_online
              WHERE empresa_id = $1
                AND estado IN ('entregado', 'confirmado', 'en_preparacion', 'enviado')
-               AND DATE(fecha_pedido) BETWEEN $2 AND $3
+               AND ${aBogota("fecha_pedido")} BETWEEN $2 AND $3
            ) src`,
           [empresa_id, periodo2_desde, periodo2_hasta]
         ),

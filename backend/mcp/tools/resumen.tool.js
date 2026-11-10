@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aBogota, HOY_BOGOTA, fechaCO } from "./fechas.js";
 
 export function registerResumenTools(server, pool, empresa_id) {
   server.tool(
@@ -14,13 +15,13 @@ export function registerResumenTools(server, pool, empresa_id) {
            FROM (
              SELECT SUM(total) AS ingresos, COUNT(*) AS transacciones
              FROM ventas
-             WHERE empresa_id = $1 AND DATE(fecha) = CURRENT_DATE
+             WHERE empresa_id = $1 AND ${aBogota("fecha")} = ${HOY_BOGOTA}
              UNION ALL
              SELECT SUM(total) AS ingresos, COUNT(*) AS transacciones
              FROM pedidos_online
              WHERE empresa_id = $1
                AND estado IN ('entregado', 'confirmado', 'en_preparacion', 'enviado')
-               AND DATE(fecha_pedido) = CURRENT_DATE
+               AND ${aBogota("fecha_pedido")} = ${HOY_BOGOTA}
            ) src`,
           [empresa_id]
         ),
@@ -68,7 +69,7 @@ export function registerResumenTools(server, pool, empresa_id) {
            po.id,
            po.fecha_pedido,
            po.total,
-           c.nombre AS cliente,
+           c.nombre || ' ' || COALESCE(c.apellido, '') AS cliente,
            c.telefono,
            JSON_AGG(
              JSON_BUILD_OBJECT(
@@ -78,11 +79,11 @@ export function registerResumenTools(server, pool, empresa_id) {
              )
            ) AS productos
          FROM pedidos_online po
-         JOIN clientes c ON c.id = po.cliente_id
+         JOIN persona c ON c.id = po.cliente_id
          JOIN detalle_pedido_online dp ON dp.pedido_id = po.id
          JOIN productos p ON p.id = dp.producto_id
          WHERE po.empresa_id = $1 AND po.estado = 'pendiente'
-         GROUP BY po.id, po.fecha_pedido, po.total, c.nombre, c.telefono
+         GROUP BY po.id, po.fecha_pedido, po.total, c.id
          ORDER BY po.fecha_pedido ASC
          LIMIT 20`,
         [empresa_id]
@@ -96,7 +97,7 @@ export function registerResumenTools(server, pool, empresa_id) {
         .map(
           (p) =>
             `Pedido #${p.id} — ${p.cliente} (${p.telefono || "sin tel."})\n` +
-            `  Fecha: ${new Date(p.fecha_pedido).toLocaleDateString("es-CO")}\n` +
+            `  Fecha: ${fechaCO(p.fecha_pedido)}\n` +
             `  Total: $${Number(p.total).toLocaleString("es-CO")} COP\n` +
             `  Productos: ${p.productos.map((x) => `${x.producto} x${x.cantidad}`).join(", ")}`
         )

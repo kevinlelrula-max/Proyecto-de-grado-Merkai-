@@ -6,6 +6,29 @@ import pool from "../config/db.js";
 
 const router = Router();
 
+// Usuarios que ya pusieron bien su contraseña y deben elegir empresa: id temporal -> datos
+const pendientes = new Map();
+setInterval(() => {
+  const ahora = Date.now();
+  for (const [id, d] of pendientes) if (d.expiresAt < ahora) pendientes.delete(id);
+}, 5 * 60 * 1000);
+
+// Empresas a las que puede entrar esta persona (la principal y las vinculadas en persona_empresas)
+async function empresasDelUsuario(user) {
+  const { rows } = await pool.query(
+    `SELECT e.id, e.nombre, pe.rol_id
+     FROM persona_empresas pe JOIN empresas e ON e.id = pe.empresa_id
+     WHERE pe.persona_id = $1`,
+    [user.id]
+  );
+  const lista = rows.filter((r) => r.rol_id !== 4);
+  if (user.empresa_id && !lista.some((e) => e.id === user.empresa_id)) {
+    const { rows: [principal] } = await pool.query("SELECT id, nombre FROM empresas WHERE id = $1", [user.empresa_id]);
+    if (principal) lista.push({ id: principal.id, nombre: principal.nombre, rol_id: user.rol_id });
+  }
+  return lista.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), "es"));
+}
+
 // Códigos temporales: code -> { userId, empresaId, rolId, codeChallenge, redirectUri, expiresAt }
 const authCodes = new Map();
 
@@ -16,20 +39,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-function loginPage(params, error = null) {
-  const safe = (v) =>
-    String(v || "")
-      .replace(/&/g, "&amp;")
-      .replace(/"/g, "&quot;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Merkai — Conectar con Claude</title>
-  <style>
+const ESTILOS = `
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:radial-gradient(900px 500px at 50% -10%,rgba(0,201,167,0.14),transparent 60%),#080f1e;color:#cbd5e1;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
     .card{background:#0e1929;border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:100%;max-width:420px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.45)}
@@ -63,7 +73,22 @@ function loginPage(params, error = null) {
     .error{display:flex;gap:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.28);color:#fca5a5;padding:11px 14px;border-radius:9px;font-size:13px;margin-bottom:18px;line-height:1.45}
     .note{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11.5px;color:#64748b;text-align:center;margin-top:18px;line-height:1.5}
     @media (max-width:420px){.head{padding:22px 20px 18px}.body{padding:20px}}
-  </style>
+  `;
+
+function loginPage(params, error = null) {
+  const safe = (v) =>
+    String(v || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Merkai — Conectar con Claude</title>
+  <style>${ESTILOS}</style>
 </head>
 <body>
   <main class="card">
@@ -114,6 +139,67 @@ function loginPage(params, error = null) {
 </html>`;
 }
 
+const escapar = (v) =>
+  String(v || "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// Segundo paso: la persona tiene varias empresas y elige a cuál se conecta Claude
+function paginaElegirEmpresa(params, pendienteId, empresas, error = null) {
+  const radios = empresas
+    .map(
+      (e, i) => `
+        <label class="opcion">
+          <input type="radio" name="empresa_id" value="${escapar(e.id)}" ${i === 0 ? "checked" : ""} required/>
+          <span class="op-nombre">${escapar(e.nombre)}</span>
+        </label>`
+    )
+    .join("");
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Merkai — Elige tu negocio</title>
+  <style>${ESTILOS}
+    .opcion{display:flex;text-transform:none;letter-spacing:0;font-size:14px;align-items:center;gap:12px;padding:13px 14px;margin-bottom:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:10px;cursor:pointer;transition:border-color .15s,background .15s}
+    .opcion:hover{border-color:#00C9A7}
+    .opcion:has(input:checked){border-color:#00C9A7;background:rgba(0,201,167,0.08)}
+    .opcion input{accent-color:#00C9A7;width:18px;height:18px;flex:none}
+    .op-nombre{font-size:14.5px;font-weight:600;color:#e2e8f0}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="head">
+      <div class="link" aria-hidden="true">
+        <div class="badge merkai">M</div>
+        <div class="dots">• • •</div>
+        <div class="badge claude">✳</div>
+      </div>
+      <h1>¿Qué negocio quieres conectar?</h1>
+      <p class="subtitle">Tu cuenta tiene acceso a varios negocios. <b>Claude</b> consultará solo el que elijas; para conectar otro, repite este paso con otra conexión.</p>
+    </div>
+    <div class="body">
+      ${error ? `<div class="error" role="alert"><span>⚠</span><span>${escapar(error)}</span></div>` : ""}
+      <form method="POST" action="/oauth/authorize" id="f">
+        <input type="hidden" name="pendiente" value="${escapar(pendienteId)}"/>
+        <input type="hidden" name="redirect_uri" value="${escapar(params.redirect_uri)}"/>
+        <input type="hidden" name="state" value="${escapar(params.state)}"/>
+        <input type="hidden" name="code_challenge" value="${escapar(params.code_challenge)}"/>
+        <input type="hidden" name="code_challenge_method" value="${escapar(params.code_challenge_method)}"/>
+        <input type="hidden" name="client_id" value="${escapar(params.client_id)}"/>
+        ${radios}
+        <button type="submit" class="btn" id="b">Autorizar acceso</button>
+      </form>
+      <div class="note">🔒 Puedes revocar este acceso cuando quieras desde Claude</div>
+    </div>
+  </main>
+  <script>
+    document.getElementById("f").onsubmit=function(){var b=document.getElementById("b");b.disabled=true;b.textContent="Conectando…";};
+  </script>
+</body>
+</html>`;
+}
+
 // POST /oauth/register — registro dinámico de clientes (RFC 7591)
 // Claude.ai llama esto automáticamente para obtener un client_id
 router.post("/register", (req, res) => {
@@ -146,37 +232,62 @@ router.get("/authorize", (req, res) => {
   res.send(loginPage(req.query));
 });
 
-// POST /oauth/authorize — procesa login y redirige con code
+// POST /oauth/authorize — procesa login (y, si hay varias empresas, la elección) y redirige con code
 router.post("/authorize", async (req, res) => {
   try {
-    const { usuario, contrasena, redirect_uri, state, code_challenge, code_challenge_method, client_id } = req.body || {};
+    const { usuario, contrasena, redirect_uri, state, code_challenge, code_challenge_method, client_id, pendiente, empresa_id } = req.body || {};
 
     if (!redirect_uri) return res.status(400).send("redirect_uri requerido");
 
     const params = { redirect_uri, state, code_challenge, code_challenge_method, client_id };
+    let userId, empresaElegida;
 
-    const result = await pool.query(
-      `SELECT p.id, p.empresa_id, p.rol_id, p.contrasena
-       FROM persona p
-       WHERE p.usuario = $1`,
-      [usuario]
-    );
+    if (pendiente) {
+      // Segundo paso: ya se verificó la contraseña; ahora llega la empresa elegida
+      const datos = pendientes.get(pendiente);
+      if (!datos || datos.expiresAt < Date.now() || datos.redirect_uri !== redirect_uri) {
+        return res.send(loginPage(params, "La sesión expiró. Inicia sesión de nuevo."));
+      }
+      // Solo se acepta una empresa de la lista calculada por el servidor para esa persona
+      const elegida = datos.empresas.find((e) => String(e.id) === String(empresa_id));
+      if (!elegida) return res.send(paginaElegirEmpresa(params, pendiente, datos.empresas, "Elige un negocio de la lista."));
+      pendientes.delete(pendiente);
+      userId = datos.userId;
+      empresaElegida = elegida;
+    } else {
+      const result = await pool.query(
+        `SELECT p.id, p.empresa_id, p.rol_id, p.contrasena
+         FROM persona p
+         WHERE p.usuario = $1`,
+        [usuario]
+      );
 
-    const user = result.rows[0];
+      const user = result.rows[0];
 
-    if (!user || !(await bcrypt.compare(contrasena, user.contrasena))) {
-      return res.send(loginPage(params, "Credenciales incorrectas"));
-    }
+      if (!user || !(await bcrypt.compare(contrasena, user.contrasena))) {
+        return res.send(loginPage(params, "Credenciales incorrectas"));
+      }
 
-    if (user.rol_id === 4) {
-      return res.send(loginPage(params, "Este usuario no tiene acceso a la plataforma"));
+      if (user.rol_id === 4) {
+        return res.send(loginPage(params, "Este usuario no tiene acceso a la plataforma"));
+      }
+
+      const empresas = await empresasDelUsuario(user);
+      if (empresas.length > 1) {
+        // Varias empresas: se pregunta a cuál conectar (la contraseña ya no vuelve a viajar)
+        const id = crypto.randomBytes(24).toString("hex");
+        pendientes.set(id, { userId: user.id, empresas, redirect_uri, expiresAt: Date.now() + 10 * 60 * 1000 });
+        return res.send(paginaElegirEmpresa(params, id, empresas));
+      }
+      userId = user.id;
+      empresaElegida = empresas[0] || { id: user.empresa_id, rol_id: user.rol_id };
     }
 
     const code = crypto.randomBytes(32).toString("hex");
     authCodes.set(code, {
-      userId: user.id,
-      empresaId: user.empresa_id,
-      rolId: user.rol_id,
+      userId,
+      empresaId: empresaElegida.id,
+      rolId: empresaElegida.rol_id,
       codeChallenge: code_challenge || null,
       codeChallengeMethod: code_challenge_method || "S256",
       redirectUri: redirect_uri,

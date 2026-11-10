@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { fechaCO } from "./fechas.js";
 
 export function registerClientesTools(server, pool, empresa_id) {
   server.tool(
@@ -11,12 +12,12 @@ export function registerClientesTools(server, pool, empresa_id) {
     async ({ limite = 10, dias = 90 }) => {
       const result = await pool.query(
         `SELECT
-           c.nombre,
-           c.email,
+           c.nombre || ' ' || COALESCE(c.apellido, '') AS nombre,
+           c.usuario AS email,
            c.telefono,
            COUNT(DISTINCT src.ref_id) AS total_compras,
            COALESCE(SUM(src.total), 0) AS total_gastado
-         FROM clientes c
+         FROM persona c
          JOIN (
            SELECT cliente_id, id AS ref_id, total
            FROM ventas
@@ -28,8 +29,8 @@ export function registerClientesTools(server, pool, empresa_id) {
              AND estado IN ('entregado','confirmado','en_preparacion','enviado')
              AND fecha_pedido >= NOW() - ($2 || ' days')::INTERVAL
          ) src ON src.cliente_id = c.id
-         WHERE c.empresa_id = $1
-         GROUP BY c.id, c.nombre, c.email, c.telefono
+         WHERE c.rol_id = 4
+         GROUP BY c.id, c.nombre, c.apellido, c.usuario, c.telefono
          ORDER BY total_compras DESC, total_gastado DESC
          LIMIT $3`,
         [empresa_id, dias, limite]
@@ -68,9 +69,13 @@ export function registerClientesTools(server, pool, empresa_id) {
     },
     async ({ nombre }) => {
       const clienteResult = await pool.query(
-        `SELECT id, nombre, email, telefono
-         FROM clientes
-         WHERE empresa_id = $1 AND LOWER(nombre) LIKE LOWER($2)
+        `SELECT p.id, p.nombre || ' ' || COALESCE(p.apellido, '') AS nombre, p.usuario AS email, p.telefono
+         FROM persona p
+         WHERE p.rol_id = 4
+           AND LOWER(p.nombre || ' ' || COALESCE(p.apellido, '')) LIKE LOWER($2)
+           AND (p.empresa_id = $1
+                OR EXISTS (SELECT 1 FROM ventas v WHERE v.cliente_id = p.id AND v.empresa_id = $1)
+                OR EXISTS (SELECT 1 FROM pedidos_online o WHERE o.cliente_id = p.id AND o.empresa_id = $1))
          LIMIT 1`,
         [empresa_id, `%${nombre}%`]
       );
@@ -138,7 +143,7 @@ export function registerClientesTools(server, pool, empresa_id) {
       const historial = historialResult.rows
         .map(
           (v) =>
-            `• ${new Date(v.fecha).toLocaleDateString("es-CO")} [${v.origen}] — $${Number(v.total).toLocaleString("es-CO")} COP\n` +
+            `• ${fechaCO(v.fecha)} [${v.origen}] — $${Number(v.total).toLocaleString("es-CO")} COP\n` +
             `  ${v.productos.map((p) => `${p.producto} x${p.cantidad}`).join(", ")}`
         )
         .join("\n");
