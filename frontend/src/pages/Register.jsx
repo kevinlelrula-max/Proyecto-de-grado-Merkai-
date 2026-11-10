@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "react-toastify";
 import { register } from "../services/api";
 
 export default function Register() {
@@ -27,9 +28,9 @@ export default function Register() {
     const res = await register(form, token);
 
     if (res.id) {
-      alert("Usuario creado 🚀");
+      toast.success("Usuario creado correctamente");
     } else {
-      alert(res.error);
+      toast.error(res.error);
     }
   };
 

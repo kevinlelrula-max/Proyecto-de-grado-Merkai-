@@ -1,0 +1,2 @@
+ALTER TABLE empresas
+ADD COLUMN IF NOT EXISTS color_secundario VARCHAR(10) DEFAULT '#0B1628';

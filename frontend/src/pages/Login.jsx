@@ -1,18 +1,19 @@
 import { useState } from "react";
-import { login } from "../services/api";
+import { toast } from "react-toastify";
+import { loginEmpresa } from "../services/api";
 
 export default function Login() {
   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
 
   const handleLogin = async () => {
-    const res = await login({ usuario, contrasena });
-
+    
+    const res = await loginEmpresa({ usuario, contrasena });
     if (res.token) {
       localStorage.setItem("token", res.token);
-      alert("Login exitoso 🚀");
+      toast.success("Login exitoso");
     } else {
-      alert(res.error);
+      toast.error(res.error);
     }
   };
 
@@ -24,7 +25,7 @@ export default function Login() {
         
         <h2 style={styles.title}>Bienvenido 👋</h2>
         <p style={styles.subtitle}>
-          Inicia sesión en FishWare
+          Inicia sesión en Merkai
         </p>
 
         {/* INPUT USUARIO */}

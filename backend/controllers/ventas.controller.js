@@ -1,4 +1,17 @@
 import pool from "../config/db.js";
+import { crearNotificacion } from "../utils/notificaciones.js";
+import { getNivelLealtadCliente, precioInteligente, redondear } from "../utils/calcularPedido.js";
+
+// =========================
+// CREAR VENTA
+// =========================
+// Error de validación de negocio: responde 4xx con su mensaje (los demás errores son 500)
+class ErrorVenta extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
 
 export const crearVenta = async (req, res) => {
   const client = await pool.connect();
@@ -9,7 +22,38 @@ export const crearVenta = async (req, res) => {
 
     const { cliente_id, metodo_pago_id, productos } = req.body;
 
+    // ✅ Validación previa antes de abrir la transacción
+    if (!cliente_id || !metodo_pago_id || !Array.isArray(productos) || productos.length === 0) {
+      return res.status(400).json({ error: "Faltan datos obligatorios" });
+    }
+
     await client.query("BEGIN");
+
+    // Sin caja abierta no se puede vender: así toda venta queda dentro de una sesión de caja
+    const { rows: cajaAbierta } = await client.query(
+      "SELECT id FROM caja_sesiones WHERE empresa_id = $1 AND estado = 'abierta' LIMIT 1",
+      [empresa_id]
+    );
+    if (cajaAbierta.length === 0) {
+      throw new ErrorVenta("La caja está cerrada. Abre la caja para registrar ventas.", 409);
+    }
+
+    // El cliente debe existir y el método de pago ser válido
+    const { rows: clienteOk } = await client.query(
+      "SELECT 1 FROM persona WHERE id = $1 AND rol_id = 4",
+      [cliente_id]
+    );
+    if (clienteOk.length === 0) throw new ErrorVenta("Cliente no encontrado");
+
+    const { rows: metodoOk } = await client.query(
+      "SELECT 1 FROM metodo_pago WHERE id = $1",
+      [metodo_pago_id]
+    );
+    if (metodoOk.length === 0) throw new ErrorVenta("Método de pago no válido");
+
+    // Descuento por nivel de lealtad: se calcula en el servidor, igual que en la tienda en línea
+    const { nivel } = await getNivelLealtadCliente(cliente_id, empresa_id, client);
+    const descuentoLealtad = nivel ? parseFloat(nivel.descuento_porcentaje) || 0 : 0;
 
     const ventaResult = await client.query(
       `INSERT INTO ventas (empresa_id, administrador_id, cliente_id, metodo_pago_id, total)
@@ -25,35 +69,61 @@ export const crearVenta = async (req, res) => {
     for (const item of productos) {
       const { producto_id, cantidad } = item;
 
+      // ✅ Validar cantidad > 0 antes del INSERT para dar mensaje claro
+      if (!Number.isFinite(Number(cantidad)) || Number(cantidad) <= 0) {
+        throw new ErrorVenta("La cantidad debe ser mayor a 0");
+      }
+
+      // FOR UPDATE: bloquea el producto hasta el COMMIT para que dos ventas simultáneas
+      // no lean el mismo stock y lo dejen negativo
       const productoResult = await client.query(
-        "SELECT * FROM productos WHERE id = $1 AND empresa_id = $2",
+        "SELECT * FROM productos WHERE id = $1 AND empresa_id = $2 FOR UPDATE",
         [producto_id, empresa_id]
       );
 
       const producto = productoResult.rows[0];
 
       if (!producto) {
-        throw new Error("Producto no encontrado");
+        throw new ErrorVenta("Producto no encontrado");
+      }
+
+      if (producto.activo === false) {
+        throw new ErrorVenta(`${producto.nombre} está desactivado y no se puede vender`);
       }
 
       if (producto.stock < cantidad) {
-        throw new Error(`Stock insuficiente para ${producto.nombre}`);
+        throw new ErrorVenta(`Stock insuficiente para ${producto.nombre} (disponible: ${producto.stock})`, 409);
       }
 
-      const subtotal = producto.precio * cantidad;
+      const precioUnitario = redondear(precioInteligente(producto, descuentoLealtad));
+      const subtotal = precioUnitario * cantidad;
       total += subtotal;
 
       await client.query(
-        `INSERT INTO detalle_venta (venta_id, producto_id, kilos, precio_unitario)
+        `INSERT INTO detalle_venta (venta_id, producto_id, cantidad, precio_unitario)
          VALUES ($1, $2, $3, $4)`,
-        [venta.id, producto_id, cantidad, producto.precio]
+        [venta.id, producto_id, cantidad, precioUnitario]
       );
 
-      await client.query(
-        `UPDATE productos SET stock = stock - $1 WHERE id = $2`,
+      const stockResult = await client.query(
+        `UPDATE productos SET stock = stock - $1 WHERE id = $2 RETURNING stock, stock_minimo, nombre`,
         [cantidad, producto_id]
       );
+      const { stock: stockNuevo, stock_minimo, nombre: nombreProducto } = stockResult.rows[0];
+      if (stockNuevo <= stock_minimo) {
+        // Fire-and-forget: no bloquea la transacción
+        crearNotificacion({
+          empresa_id,
+          tipo: "stock_bajo",
+          titulo: `Stock bajo: ${nombreProducto}`,
+          mensaje: `Quedan ${stockNuevo} unidades (mínimo: ${stock_minimo})`,
+          seccion: "productos",
+          referencia_id: producto_id,
+        });
+      }
     }
+
+    total = redondear(total);
 
     await client.query(
       "UPDATE ventas SET total = $1 WHERE id = $2",
@@ -62,62 +132,216 @@ export const crearVenta = async (req, res) => {
 
     await client.query("COMMIT");
 
-    res.json({ message: "Venta realizada", total });
+    // ✅ Devolver info suficiente para el recibo en el frontend
+    res.status(201).json({
+      venta_id: venta.id,
+      total,
+      fecha: venta.fecha,
+      descuento_lealtad: descuentoLealtad,
+      nivel_lealtad: nivel ? nivel.nombre : null
+    });
 
   } catch (error) {
-    await client.query("ROLLBACK");
+    await client.query("ROLLBACK").catch(() => {});
+    if (error instanceof ErrorVenta) {
+      return res.status(error.status).json({ error: error.message });
+    }
     console.error(error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Error al registrar la venta" });
   } finally {
     client.release();
   }
 };
 
-export const listarVentas = async (req, res) => {
+// =========================
+// LISTAR VENTAS EMPRESA
+// =========================
+export const listarVentasEmpresa = async (req, res) => {
   try {
     const empresa_id = req.user.empresa_id;
+    const { hoy } = req.query;
+ 
+    // ✅ Si viene ?hoy=true filtra solo las ventas de hoy EN HORA DE COLOMBIA.
+    // Las fechas son "timestamp sin zona" guardadas con la hora del servidor de base de datos
+    // (UTC en Neon): se interpretan en esa zona y se pasan a Bogotá antes de comparar el día,
+    // para que después de las 7 p. m. el "hoy" no salte al día siguiente.
+    const aBogota = (col) =>
+      `((${col} AT TIME ZONE current_setting('TimeZone')) AT TIME ZONE 'America/Bogota')::date`;
+    const hoyBogota = "(NOW() AT TIME ZONE 'America/Bogota')::date";
 
-    // 🔹 Primero traemos las ventas principales
-    const ventasResult = await pool.query(
+    const filtroFecha = hoy === "true"
+      ? `AND ${aBogota("v.fecha")} = ${hoyBogota}`
+      : "";
+
+    const filtroFechaOnline = hoy === "true"
+      ? `AND ${aBogota("p.fecha_pedido")} = ${hoyBogota}`
+      : "";
+
+    const result = await pool.query(
+      `-- POS
+       SELECT
+         v.id        AS venta_id,
+         v.fecha,
+         v.total,
+         p_cliente.nombre || ' ' || p_cliente.apellido AS cliente,
+         mp.metodo   AS metodo_pago,
+         'completada' AS estado,
+         'pos'        AS tipo
+       FROM ventas v
+       JOIN persona p_cliente ON v.cliente_id = p_cliente.id
+       JOIN metodo_pago mp    ON v.metodo_pago_id = mp.id
+       WHERE v.empresa_id = $1 ${filtroFecha}
+
+       UNION ALL
+
+       -- Pedidos online (excluye cancelados)
+       SELECT
+         p.id                    AS venta_id,
+         p.fecha_pedido          AS fecha,
+         p.total,
+         per.nombre || ' ' || per.apellido AS cliente,
+         mp.metodo               AS metodo_pago,
+         p.estado,
+         'online'                AS tipo
+       FROM pedidos_online p
+       JOIN persona per       ON per.id = p.cliente_id
+       JOIN metodo_pago mp    ON mp.id  = p.metodo_pago_id
+       WHERE p.empresa_id = $1
+         AND p.estado != 'cancelado'
+         ${filtroFechaOnline}
+
+       ORDER BY fecha DESC`,
+      [empresa_id]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+ 
+
+// =========================
+// DETALLE DE UNA VENTA
+// =========================
+export const detalleVenta = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const empresa_id = req.user.empresa_id;
+
+    // Cabecera de la venta
+    const ventaResult = await pool.query(
       `SELECT 
          v.id AS venta_id,
          v.fecha,
          v.total,
-         p_admin.nombre || ' ' || p_admin.apellido AS administrador,
+         v.ruta_pdf,
          p_cliente.nombre || ' ' || p_cliente.apellido AS cliente,
+         p_cliente.numero_documento,
+         p_admin.nombre || ' ' || p_admin.apellido AS administrador,
          mp.metodo AS metodo_pago
        FROM ventas v
-       JOIN persona p_admin ON v.administrador_id = p_admin.id
        JOIN persona p_cliente ON v.cliente_id = p_cliente.id
-       JOIN metodo_pago mp ON v.metodo_pago_id = mp.id
-       WHERE v.empresa_id = $1
-       ORDER BY v.fecha DESC`,
-      [empresa_id]
+       JOIN persona p_admin   ON v.administrador_id = p_admin.id
+       JOIN metodo_pago mp    ON v.metodo_pago_id = mp.id
+       WHERE v.id = $1 AND v.empresa_id = $2`,
+      [id, empresa_id]
     );
 
-    const ventas = ventasResult.rows;
-
-    for (let venta of ventas) {
-      const detallesResult = await pool.query(
-        `SELECT 
-           dv.producto_id,
-           pr.nombre AS producto,
-           dv.kilos AS cantidad,
-           dv.precio_unitario,
-           dv.subtotal
-         FROM detalle_venta dv
-         JOIN productos pr ON dv.producto_id = pr.id
-         WHERE dv.venta_id = $1`,
-        [venta.venta_id]
-      );
-
-      venta.productos = detallesResult.rows;
+    if (ventaResult.rows.length === 0) {
+      return res.status(404).json({ error: "Venta no encontrada" });
     }
 
-    res.json(ventas);
+    // Productos del detalle
+    const detalleResult = await pool.query(
+      `SELECT 
+         p.nombre AS producto,
+         dv.cantidad,
+         dv.precio_unitario,
+         dv.subtotal
+       FROM detalle_venta dv
+       JOIN productos p ON dv.producto_id = p.id
+       WHERE dv.venta_id = $1`,
+      [id]
+    );
+
+    res.json({
+      ...ventaResult.rows[0],
+      detalle: detalleResult.rows
+    });
 
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: error.message });
   }
 };
+
+// =========================
+// HISTORIAL DE VENTAS POR CLIENTE
+// =========================
+export const historialCliente = async (req, res) => {
+  try {
+    const { cliente_id } = req.params;
+    const empresa_id = req.user.empresa_id;
+
+    const result = await pool.query(
+      `SELECT 
+         v.id AS venta_id,
+         v.fecha,
+         v.total,
+         mp.metodo AS metodo_pago,
+         json_agg(json_build_object(
+           'producto',        p.nombre,
+           'cantidad',        dv.cantidad,
+           'unidad',          p.unidad,
+           'precio_unitario', dv.precio_unitario,
+           'subtotal',        dv.subtotal
+         )) AS detalle
+       FROM ventas v
+       JOIN metodo_pago mp    ON mp.id = v.metodo_pago_id
+       JOIN detalle_venta dv  ON dv.venta_id = v.id
+       JOIN productos p       ON p.id = dv.producto_id
+       WHERE v.cliente_id = $1 AND v.empresa_id = $2
+       GROUP BY v.id, v.fecha, v.total, mp.metodo
+       ORDER BY v.fecha DESC`,
+      [cliente_id, empresa_id]
+    );
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// =========================
+// REPORTE PRODUCTOS MÁS VENDIDOS
+// =========================
+export const reporteProductos = async (req, res) => {
+  try {
+    const empresa_id = req.user.empresa_id;
+
+    const result = await pool.query(
+      `SELECT 
+        p.nombre,
+        SUM(dv.cantidad) AS total_vendido,
+        SUM(dv.cantidad * dv.precio_unitario) AS total_ingresos
+      FROM detalle_venta dv
+      JOIN productos p ON dv.producto_id = p.id
+      JOIN ventas v ON dv.venta_id = v.id
+      WHERE v.empresa_id = $1
+      GROUP BY p.nombre
+      ORDER BY total_vendido DESC`,
+      [empresa_id]
+    );
+
+    res.json(result.rows);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
