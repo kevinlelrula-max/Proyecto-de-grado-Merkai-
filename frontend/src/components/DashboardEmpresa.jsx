@@ -726,10 +726,10 @@ export default function DashboardEmpresa() {
       </aside>
 
       {/* ── MAIN ── */}
-      <main className="flex-1 md:ml-60 ml-0 flex flex-col min-h-screen">
+      <main className="flex-1 min-w-0 md:ml-60 ml-0 flex flex-col min-h-screen">
 
         {/* TOPBAR */}
-        <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-xl border-b border-slate-200/80 px-6 md:px-10 h-[68px] flex items-center justify-between shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+        <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-xl border-b border-slate-200/80 px-4 sm:px-6 lg:px-10 h-[68px] flex items-center justify-between shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
           <div className="flex items-center gap-3">
             <button
               className="md:hidden w-9 h-9 rounded-[9px] bg-slate-100 border border-slate-200 flex items-center justify-center cursor-pointer text-slate-500 hover:bg-slate-200 transition-colors p-0 mr-1 flex-shrink-0"
@@ -763,12 +763,12 @@ export default function DashboardEmpresa() {
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
               <span>Buscar</span>
-              <kbd className="text-[10px] bg-slate-100 border border-slate-200 rounded px-1.5 py-[2px] text-slate-400 font-sans">Ctrl K</kbd>
+              <kbd className="hidden lg:inline text-[10px] bg-slate-100 border border-slate-200 rounded px-1.5 py-[2px] text-slate-400 font-sans">Ctrl K</kbd>
             </button>
 
             <NotificacionesBell token={token} irA={irA} />
 
-            <div className="w-px h-8 bg-slate-300 mx-2" />
+            <div className="w-px h-8 bg-slate-300 mx-1 lg:mx-2" />
 
             {/* User menu */}
             <div
@@ -778,7 +778,7 @@ export default function DashboardEmpresa() {
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#00C9A7] to-[#0099FF] flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0">
                 {inicial}
               </div>
-              <div className="hidden sm:block">
+              <div className="hidden lg:block">
                 <div className="text-[13px] font-semibold text-[#0B1628] leading-tight">{nombreUsuario}</div>
                 <div className="text-[10px] text-[#00A884] leading-tight font-medium">{rolLabel}</div>
               </div>
@@ -834,7 +834,7 @@ export default function DashboardEmpresa() {
 
         {/* CONTENIDO */}
         <div className="flex-1 p-4 md:p-7">
-          <div className="bg-white rounded-2xl border border-black/[0.06] min-h-[calc(100vh-108px)] overflow-hidden [&:has(.editor-fullbleed)]:overflow-visible [&:has(.editor-fullbleed)]:bg-transparent [&:has(.editor-fullbleed)]:border-none [&:has(.editor-fullbleed)]:shadow-none">
+          <div className="bg-white rounded-2xl border border-black/[0.06] min-h-[calc(100vh-108px)] overflow-x-auto overflow-y-hidden [&:has(.editor-fullbleed)]:overflow-visible [&:has(.editor-fullbleed)]:bg-transparent [&:has(.editor-fullbleed)]:border-none [&:has(.editor-fullbleed)]:shadow-none">
             {seccion === "inicio"        && <Inicio onIrA={irA} />}
             {seccion === "productos"     && <Productos />}
             {seccion === "clientes"      && <Clientes />}

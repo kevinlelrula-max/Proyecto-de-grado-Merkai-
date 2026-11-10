@@ -158,7 +158,7 @@ const s = {
   },
   tabActive: { color: "#2563eb", borderBottomColor: "#2563eb", fontWeight: "600" },
 
-  statsRow: { display: "flex", gap: "12px", marginBottom: "20px" },
+  statsRow: { display: "flex", flexWrap: "wrap", gap: "12px", marginBottom: "20px" },
   statCard: {
     flex: 1, backgroundColor: "white", borderRadius: "16px",
     padding: "18px 20px", display: "flex", flexDirection: "column", gap: "6px",

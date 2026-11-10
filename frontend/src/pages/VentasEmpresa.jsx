@@ -258,7 +258,7 @@ const s = {
   headerTitle: { fontSize: "20px", fontWeight: "700", color: "#0f172a", margin: 0 },
 
   // Stats
-  statsRow: { display: "flex", gap: "12px", marginBottom: "20px" },
+  statsRow: { display: "flex", flexWrap: "wrap", gap: "12px", marginBottom: "20px" },
   statCard: {
     flex: 1, backgroundColor: "#f8fafc", borderRadius: "12px",
     padding: "12px 16px", display: "flex", flexDirection: "column", gap: "4px",

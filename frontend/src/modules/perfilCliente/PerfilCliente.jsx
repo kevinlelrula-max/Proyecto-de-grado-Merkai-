@@ -5,10 +5,12 @@ import DatosPersonales from "./components/DatosPersonales";
 import CambiarContrasena from "./components/CambiarContrasena";
 import NivelLealtad from "./components/NivelLealtad";
 import SeccionReferido from "../referidos/components/SeccionReferido";
+import { useEsMovil } from "../tienda/hooks/useEsMovil";
 
 export default function PerfilCliente() {
   const { empresaSlug: slugParam } = useParams();
   const navigate = useNavigate();
+  const esMovil = useEsMovil();
   const empresaSlug = slugParam || localStorage.getItem("ultima_empresa_slug");
   const rutaTienda = empresaSlug ? `/tienda/${empresaSlug}` : "/";
 
@@ -42,7 +44,7 @@ export default function PerfilCliente() {
   const inicialNombre = perfil?.nombre?.charAt(0).toUpperCase() ?? "C";
 
   return (
-    <div style={s.page}>
+    <div style={{ ...s.page, ...(esMovil ? { padding: "20px 16px 40px" } : {}) }}>
 
       {/* Back button */}
       <button style={s.backBtn} onClick={() => navigate(rutaTienda)}>
@@ -51,7 +53,7 @@ export default function PerfilCliente() {
       </button>
 
       {/* Profile hero */}
-      <div style={s.hero}>
+      <div style={{ ...s.hero, ...(esMovil ? { flexWrap: "wrap", padding: "18px 16px" } : {}) }}>
         <div style={s.heroLeft}>
           <div style={s.heroAvatar}>{inicialNombre}</div>
           <div>
@@ -66,7 +68,7 @@ export default function PerfilCliente() {
       </div>
 
       {/* Two-column content */}
-      <div style={s.grid}>
+      <div style={{ ...s.grid, ...(esMovil ? { gridTemplateColumns: "minmax(0, 1fr)" } : {}) }}>
         <div style={s.col}>
           <DatosPersonales
             perfil={perfil}
@@ -186,7 +188,7 @@ const s = {
     gap: "20px",
     alignItems: "start",
   },
-  col: { display: "flex", flexDirection: "column", gap: "20px" },
+  col: { display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 },
   referidoCard: {
     backgroundColor: "white",
     borderRadius: "16px",

@@ -1,6 +1,8 @@
 import { AlertTriangle, CheckCircle, User } from "lucide-react";
+import { useEsMovil } from "../../tienda/hooks/useEsMovil";
 
 export default function DatosPersonales({ perfil, form, guardando, exito, error, onChange, onGuardar }) {
+  const esMovil = useEsMovil(480);
   return (
     <div style={s.card}>
       <div style={s.header}>
@@ -26,7 +28,7 @@ export default function DatosPersonales({ perfil, form, guardando, exito, error,
         </div>
       )}
 
-      <div style={s.grid}>
+      <div style={{ ...s.grid, ...(esMovil ? { gridTemplateColumns: "minmax(0, 1fr)" } : {}) }}>
         <Field label="Nombre">
           <input style={s.input} value={form.nombre} onChange={e => onChange("nombre", e.target.value)} placeholder="Tu nombre" />
         </Field>

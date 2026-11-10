@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import TiendaLayout from "./components/TiendaLayout";
+import { useEsMovil } from "./hooks/useEsMovil";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function TiendaContacto() {
   const { empresaSlug } = useParams();
   const location        = useLocation();
+  const esMovil         = useEsMovil();
 
   useEffect(() => {
     if (empresaSlug) localStorage.setItem("ultima_empresa_slug", empresaSlug);
@@ -58,14 +60,14 @@ export default function TiendaContacto() {
 
   return (
     <TiendaLayout empresa={empresa} carrito={carritoGuardado} onAbrirCarrito={() => navigate(`/tienda/${empresaSlug}/catalogo`)}>
-      <div style={s.page}>
+      <div style={{ ...s.page, ...(esMovil ? { padding: "32px 20px 56px" } : {}) }}>
 
         {/* Título */}
         <div style={s.header}>
           <h1 style={{ ...s.titulo, color: colorSecundario }}>Contacto</h1>
         </div>
 
-        <div style={s.grid}>
+        <div style={{ ...s.grid, ...(esMovil ? { gridTemplateColumns: "1fr", gap: "36px" } : {}) }}>
 
           {/* ── Columna izquierda: info ── */}
           <div style={s.colInfo}>

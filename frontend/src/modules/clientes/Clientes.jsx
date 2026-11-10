@@ -231,7 +231,7 @@ const s = {
     cursor: "pointer", fontSize: "13px", fontWeight: "600",
   },
 
-  statsRow: { display: "flex", gap: "12px", marginBottom: "20px" },
+  statsRow: { display: "flex", flexWrap: "wrap", gap: "12px", marginBottom: "20px" },
   statCard: {
     flex: 1, backgroundColor: "#f8fafc", borderRadius: "12px",
     padding: "12px 16px", display: "flex", flexDirection: "column", gap: "4px",

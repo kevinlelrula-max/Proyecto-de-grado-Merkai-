@@ -193,7 +193,7 @@ export default function RegistroCliente() {
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
                     onError={() => setGoogleError("No se pudo registrar con Google.")}
-                    width="350"
+                    width="280"
                     shape="rectangular"
                     theme="outline"
                     size="large"

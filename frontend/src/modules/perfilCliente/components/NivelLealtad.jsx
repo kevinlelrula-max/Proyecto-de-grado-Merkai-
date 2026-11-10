@@ -116,7 +116,7 @@ const s = {
   nivelDesc: { fontSize: "13px", color: "#475569", margin: 0, lineHeight: "1.5" },
   stats: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(92px, 1fr))",
     gap: "10px",
   },
   stat: {

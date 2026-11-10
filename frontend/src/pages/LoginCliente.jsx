@@ -206,7 +206,7 @@ export default function LoginCliente() {
               <GoogleLogin
                 onSuccess={handleGoogleSuccess}
                 onError={() => setGoogleError("No se pudo iniciar sesión con Google.")}
-                width="350"
+                width="280"
                 shape="rectangular"
                 theme="outline"
                 size="large"

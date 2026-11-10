@@ -1,5 +1,6 @@
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useEsMovil } from "../hooks/useEsMovil";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 const SLUGS_RESERVADOS = ["mis-pedidos", "perfil", "login", "registro"];
@@ -14,6 +15,9 @@ export default function TiendaLayout({ empresa, carrito, onAbrirCarrito, childre
   const navigate        = useNavigate();
   const { empresaSlug: slugParam } = useParams();
   const location        = useLocation();
+  const esMovil         = useEsMovil();
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  useEffect(() => { setMenuAbierto(false); }, [location.pathname, esMovil]);
 
   // Si el slug es una ruta reservada o undefined, usa el último slug guardado
   const empresaSlug =
@@ -95,7 +99,7 @@ export default function TiendaLayout({ empresa, carrito, onAbrirCarrito, childre
 
       {/* ── NAVBAR ── */}
       <nav style={{ ...s.nav, backgroundColor: `${colorSecundario}f7` }}>
-        <div style={s.navInner}>
+        <div style={{ ...s.navInner, ...(esMovil ? { padding: "0 16px", height: "60px", gap: "12px" } : {}) }}>
 
           {/* Marca */}
           <div style={s.navBrand} onClick={() => navigate(`/tienda/${empresaSlug}`)}>
@@ -108,11 +112,11 @@ export default function TiendaLayout({ empresa, carrito, onAbrirCarrito, childre
             ) : (
               <div style={{ ...s.navBrandDot, backgroundColor: colorMarca }} />
             )}
-            <span style={s.navBrandName}>{empresaNombre}</span>
+            <span style={{ ...s.navBrandName, ...(esMovil ? { maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : {}) }}>{empresaNombre}</span>
           </div>
 
           {/* Links */}
-          <div style={s.navLinks}>
+          {!esMovil && (<div style={s.navLinks}>
             {rutas.map((ruta) => (
               <button
                 key={ruta.path}
@@ -127,10 +131,10 @@ export default function TiendaLayout({ empresa, carrito, onAbrirCarrito, childre
                 {ruta.label}
               </button>
             ))}
-          </div>
+          </div>)}
 
           {/* Acciones */}
-          <div style={s.navActions}>
+          {!esMovil && (<div style={s.navActions}>
             {estaLogueado ? (
               <>
                 <button
@@ -193,8 +197,76 @@ export default function TiendaLayout({ empresa, carrito, onAbrirCarrito, childre
                 Cerrar sesión
               </button>
             )}
-          </div>
+          </div>)}
+
+          {/* Celular: carrito + botón de menú */}
+          {esMovil && (
+            <div style={{ ...s.navActions, gap: "10px" }}>
+              <button
+                style={{ ...s.carritoBtn, backgroundColor: carrito?.length > 0 ? colorMarca : "rgba(255,255,255,0.08)" }}
+                onClick={onAbrirCarrito}
+                aria-label="Abrir carrito"
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                  <line x1="3" y1="6" x2="21" y2="6"/>
+                  <path d="M16 10a4 4 0 0 1-8 0"/>
+                </svg>
+                {carrito?.length > 0 && <span style={s.carritoBadge}>{carrito.length}</span>}
+              </button>
+              <button
+                style={{ ...s.carritoBtn, backgroundColor: "rgba(255,255,255,0.08)" }}
+                onClick={() => setMenuAbierto((v) => !v)}
+                aria-label={menuAbierto ? "Cerrar menú" : "Abrir menú"}
+                aria-expanded={menuAbierto}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  {menuAbierto
+                    ? (<><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></>)
+                    : (<><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></>)}
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Menú desplegable (celular) */}
+        {esMovil && menuAbierto && (
+          <div style={{ ...s.menuMovil, backgroundColor: colorSecundario }}>
+            {rutas.map((ruta) => (
+              <button
+                key={ruta.path}
+                style={{ ...s.menuMovilItem, color: esActiva(ruta.path) ? "white" : "rgba(255,255,255,0.7)", borderLeft: `3px solid ${esActiva(ruta.path) ? colorMarca : "transparent"}` }}
+                onClick={() => navigate(ruta.path, { state: { empresa } })}
+              >
+                {ruta.label}
+              </button>
+            ))}
+            <div style={s.menuMovilSep} />
+            {estaLogueado ? (
+              <>
+                <button style={s.menuMovilItem} onClick={() => navigate(`/tienda/${empresaSlug}/pedidos`, { state: { empresa } })}>Mis pedidos</button>
+                <button style={s.menuMovilItem} onClick={() => navigate("/tienda/perfil")}>
+                  Mi perfil{clienteNombre ? ` (${clienteNombre.split(" ")[0]})` : ""}
+                </button>
+                <button style={{ ...s.menuMovilItem, color: "#fca5a5" }} onClick={handleCerrarSesion}>Cerrar sesión</button>
+              </>
+            ) : (
+              <>
+                <button style={s.menuMovilItem} onClick={() => navigate("/tienda/login", { state: { from: location.pathname } })}>Iniciar sesión</button>
+                <button
+                  style={{ ...s.menuMovilItem, color: colorMarca, fontWeight: 700 }}
+                  onClick={() => {
+                    const refCode = new URLSearchParams(location.search).get("ref") || localStorage.getItem("ultima_ref_codigo");
+                    navigate(`/tienda/registro${refCode ? `?ref=${refCode}` : ""}`, { state: { empresa_id: empresa?.id, empresa_slug: empresaSlug } });
+                  }}
+                >
+                  Crear cuenta
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </nav>
 
       {/* ── CONTENIDO ── */}
@@ -307,4 +379,7 @@ const s = {
   footerPowered:     { fontSize: "11px", color: "rgba(255,255,255,0.2)" },
   footerCopy:        { fontSize: "11px", color: "rgba(255,255,255,0.2)" },
   content:       { flex: 1, width: "100%" },
+  menuMovil:     { display: "flex", flexDirection: "column", padding: "8px 0 12px", borderTop: "1px solid rgba(255,255,255,0.08)" },
+  menuMovilItem: { background: "none", border: "none", borderLeft: "3px solid transparent", textAlign: "left", padding: "13px 24px", fontSize: "15px", fontWeight: "500", color: "rgba(255,255,255,0.85)", cursor: "pointer" },
+  menuMovilSep:  { height: "1px", margin: "6px 24px", backgroundColor: "rgba(255,255,255,0.1)" },
 };

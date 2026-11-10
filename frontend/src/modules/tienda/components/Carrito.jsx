@@ -411,7 +411,7 @@ function capitalize(str) {
 
 const s = {
   overlay:      { position: "fixed", inset: 0, backgroundColor: "rgba(15,23,42,0.45)", zIndex: 200, backdropFilter: "blur(3px)" },
-  panel:        { position: "fixed", top: 0, right: 0, bottom: 0, width: "420px", backgroundColor: "#fafafa", zIndex: 201, display: "flex", flexDirection: "column", boxShadow: "-4px 0 32px rgba(0,0,0,0.12)", fontFamily: "'Inter', 'Segoe UI', sans-serif" },
+  panel:        { position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 100vw)", backgroundColor: "#fafafa", zIndex: 201, maxWidth: "100vw", display: "flex", flexDirection: "column", boxShadow: "-4px 0 32px rgba(0,0,0,0.12)", fontFamily: "'Inter', 'Segoe UI', sans-serif" },
 
   // Header
   header:       { padding: "22px 24px 18px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white" },

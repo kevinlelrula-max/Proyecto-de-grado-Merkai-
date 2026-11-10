@@ -225,7 +225,7 @@ export default function RegistroEmpresa() {
                     <GoogleLogin
                       onSuccess={handleGooglePrefill}
                       onError={() => setError("No se pudo acceder a Google.")}
-                      width="350"
+                      width="280"
                       shape="rectangular"
                       theme="outline"
                       size="large"
