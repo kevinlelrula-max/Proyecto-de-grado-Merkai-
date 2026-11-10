@@ -15,6 +15,15 @@ import { generarToken } from "../utils/jwt.js";
 import { enviarEmailRecuperacion } from "../utils/email.js";
 // Clientes
 
+// Un cliente pertenece a la empresa $1 si fue creado por ella o si le ha comprado (venta de punto de venta o pedido en línea).
+// Los clientes que se registran solos en la tienda quedan sin empresa en persona; así igual aparecen en la empresa donde compran.
+// Alias de la tabla persona: "p". Parámetro $1: empresa_id.
+const CLIENTE_DE_EMPRESA = `(
+  p.empresa_id = $1
+  OR EXISTS (SELECT 1 FROM pedidos_online po WHERE po.cliente_id = p.id AND po.empresa_id = $1)
+  OR EXISTS (SELECT 1 FROM ventas v WHERE v.cliente_id = p.id AND v.empresa_id = $1)
+)`;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/clientes/:id/vista360  — Vista 360 del cliente
 // ─────────────────────────────────────────────────────────────────────────────
@@ -25,10 +34,10 @@ export const getVista360 = async (req, res) => {
 
     // 1. Datos básicos del cliente
     const { rows: [cliente] } = await pool.query(
-      `SELECT id, nombre, apellido, usuario, telefono, direccion,
-              tipo_documento, numero_documento, codigo_referido
-       FROM persona WHERE id=$1 AND empresa_id=$2 AND rol_id=4`,
-      [cliente_id, empresa_id]
+      `SELECT p.id, p.nombre, p.apellido, p.usuario, p.telefono, p.direccion,
+              p.tipo_documento, p.numero_documento, p.codigo_referido
+       FROM persona p WHERE p.id=$2 AND p.rol_id=4 AND ${CLIENTE_DE_EMPRESA}`,
+      [empresa_id, cliente_id]
     );
     if (!cliente) return res.status(404).json({ error: "Cliente no encontrado" });
 
@@ -204,12 +213,12 @@ export const getClientes = async (req, res) => {
     const empresa_id = req.user.empresa_id;
 
     const result = await pool.query(
-      `SELECT id, nombre, apellido, usuario, telefono, direccion, numero_documento,
-              COALESCE(activo, true)            AS activo,
-              usuario LIKE '%@anonimo.local'    AS anonimizado
-       FROM persona
-       WHERE empresa_id = $1 AND rol_id = 4
-       ORDER BY COALESCE(activo, true) DESC, nombre`,
+      `SELECT p.id, p.nombre, p.apellido, p.usuario, p.telefono, p.direccion, p.numero_documento,
+              COALESCE(p.activo, true)            AS activo,
+              p.usuario LIKE '%@anonimo.local'    AS anonimizado
+       FROM persona p
+       WHERE p.rol_id = 4 AND ${CLIENTE_DE_EMPRESA}
+       ORDER BY COALESCE(p.activo, true) DESC, p.nombre`,
       [empresa_id]
     );
 
@@ -226,11 +235,11 @@ export const buscarClientes = async (req, res) => {
     const { q } = req.query;
 
     const result = await pool.query(
-      `SELECT id, nombre, apellido, numero_documento, telefono
-       FROM persona
-       WHERE empresa_id = $1 AND rol_id = 4 AND activo IS NOT FALSE
-         AND (nombre ILIKE $2 OR apellido ILIKE $2 OR numero_documento ILIKE $2)
-       ORDER BY nombre
+      `SELECT p.id, p.nombre, p.apellido, p.numero_documento, p.telefono
+       FROM persona p
+       WHERE p.rol_id = 4 AND p.activo IS NOT FALSE AND ${CLIENTE_DE_EMPRESA}
+         AND (p.nombre ILIKE $2 OR p.apellido ILIKE $2 OR p.numero_documento ILIKE $2)
+       ORDER BY p.nombre
        LIMIT 10`,
       [empresa_id, `%${q}%`]
     );

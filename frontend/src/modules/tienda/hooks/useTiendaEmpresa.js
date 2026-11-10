@@ -81,7 +81,7 @@ export function useTiendaEmpresa(empresaIdProp, empresaSlug) {
       // se descartan métodos repetidos (mismo nombre) para no mostrar los botones duplicados
       const vistos = new Set();
       const unicos = (data || []).filter((m) => {
-        const k = String(m.nombre || m.id).trim().toLowerCase();
+        const k = String(m.metodo ?? m.nombre ?? m.id).trim().toLowerCase();
         if (vistos.has(k)) return false;
         vistos.add(k);
         return true;
