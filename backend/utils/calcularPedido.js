@@ -44,13 +44,44 @@ export async function getNivelLealtadCliente(clienteId, empresaId, db = pool) {
   ]);
   const totalMes = parseFloat(pos.rows[0].total) + parseFloat(online.rows[0].total);
 
-  const { rows: [nivel] } = await db.query(
+  const { rows: [nivelGanado] } = await db.query(
     `SELECT * FROM niveles_lealtad
      WHERE empresa_id=$1 AND activo=true AND monto_minimo <= $2
      ORDER BY monto_minimo DESC LIMIT 1`,
     [empresaId, totalMes]
   );
-  return { totalMes, nivel: nivel || null };
+
+  // Nivel heredado por referido (vigente): vale el mejor entre el ganado y el heredado
+  const { rows: [heredado] } = await db.query(
+    `SELECT nl.*, r.nivel_heredado_hasta
+     FROM referidos r
+     JOIN niveles_lealtad nl ON nl.id = r.nivel_heredado_id
+     WHERE r.referido_id = $1 AND r.empresa_id = $2
+       AND r.nivel_heredado_id IS NOT NULL
+       AND r.nivel_heredado_hasta > NOW()
+       AND nl.activo = true
+     ORDER BY nl.monto_minimo DESC LIMIT 1`,
+    [clienteId, empresaId]
+  );
+  const montoGanado = nivelGanado ? parseFloat(nivelGanado.monto_minimo) : -1;
+  if (heredado && heredado.monto_minimo != null && parseFloat(heredado.monto_minimo) > montoGanado) {
+    return { totalMes, nivel: heredado, heredado: true, heredado_hasta: heredado.nivel_heredado_hasta };
+  }
+  return { totalMes, nivel: nivelGanado || null, heredado: false };
+}
+
+// ¿El cliente ya tiene compras en la empresa? (ventas del punto de venta o pedidos no cancelados)
+// El beneficio de referido es solo para la primera compra.
+export async function yaTieneCompras(clienteId, empresaId, db = pool, excluirPedidoId = null) {
+  const { rows: [r] } = await db.query(
+    `SELECT (
+       (SELECT COUNT(*) FROM ventas WHERE cliente_id=$1 AND empresa_id=$2)
+     + (SELECT COUNT(*) FROM pedidos_online
+        WHERE cliente_id=$1 AND empresa_id=$2 AND estado <> 'cancelado' AND id <> COALESCE($3, 0))
+     ) AS total`,
+    [clienteId, empresaId, excluirPedidoId]
+  );
+  return parseInt(r.total) > 0;
 }
 
 // El precio más bajo entre: normal, mayoreo y normal con descuento de lealtad (igual que la tienda)
@@ -162,8 +193,10 @@ export async function calcularPedido({ empresa_id, cliente_id, detalle, cupon_id
      WHERE referido_id = $1 AND empresa_id = $2 AND estado = 'registrado' LIMIT 1`,
     [cliente_id, empresa_id]
   );
-  const descuentoReferido = referido ? Math.round(subtotal * parseFloat(referido.descuento_amigo_pct || 0) / 100) : 0;
-  const costoEnvioEfectivo = referido?.envio_gratis_amigo ? 0 : costoEnvio;
+  // El beneficio del amigo es solo para su primera compra: con un pedido previo no cancelado (o una venta) no aplica
+  const referidoVigente = referido && !(await yaTieneCompras(cliente_id, empresa_id, db));
+  const descuentoReferido = referidoVigente ? Math.round(subtotal * parseFloat(referido.descuento_amigo_pct || 0) / 100) : 0;
+  const costoEnvioEfectivo = referidoVigente && referido.envio_gratis_amigo ? 0 : costoEnvio;
 
   let cupon = null;
   let descuentoCupon = 0;

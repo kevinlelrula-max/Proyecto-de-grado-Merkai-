@@ -94,8 +94,8 @@ export const crearPedido = async (req, res) => {
     await client.query("COMMIT");
     enTransaccion = false;
 
-    // 🤝 Procesar referido (primera compra del amigo)
-    procesarReferidoPrimeraCompra({ cliente_id, empresa_id, pedido_id: pedido.id });
+    // 🤝 El referido NO se completa aquí: se completa cuando el pedido queda confirmado
+    //    (pago aprobado en pagos.controller o confirmación del negocio en actualizarEstadoPedido).
 
     // 🔔 Notificación: nuevo pedido online
     await crearNotificacion({
@@ -353,6 +353,13 @@ export const actualizarEstadoPedido = async (req, res) => {
     }
 
     await client.query("COMMIT");
+
+    // 🤝 Primera compra del amigo referido: se completa cuando el pedido pasa de pendiente a confirmado (o más adelante)
+    if (actual.estado === "pendiente" && estado !== "pendiente" && estado !== "cancelado") {
+      pool.query("SELECT cliente_id FROM pedidos_online WHERE id = $1", [id])
+        .then(({ rows: [p] }) => p && procesarReferidoPrimeraCompra({ cliente_id: p.cliente_id, empresa_id, pedido_id: Number(id) }))
+        .catch(err => console.error("Error procesando referido al confirmar pedido:", err));
+    }
 
     // 🔔 Notificaciones (fuera de transacción — fire-and-forget)
     if (estado === "entregado") {

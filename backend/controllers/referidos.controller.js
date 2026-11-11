@@ -1,6 +1,7 @@
 import pool from "../config/db.js";
 import crypto from "crypto";
 import { crearNotificacion } from "../utils/notificaciones.js";
+import { yaTieneCompras } from "../utils/calcularPedido.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function generarCodigo(nombre = "") {
@@ -206,6 +207,9 @@ export const getMiDescuentoActivo = async (req, res) => {
 
     if (!ref) return res.json({ tiene_descuento: false });
 
+    // Solo vale para la primera compra: con un pedido previo no cancelado (o una venta) ya no aplica
+    if (await yaTieneCompras(cliente_id, empresa_id)) return res.json({ tiene_descuento: false });
+
     res.json({
       tiene_descuento:  true,
       descuento_pct:    parseFloat(ref.descuento_amigo_pct),
@@ -409,7 +413,9 @@ export const getEstadisticasReferidos = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FUNCIÓN INTERNA — Llamada desde pedidos.controller al confirmar primer pedido
+// FUNCIÓN INTERNA — Se llama cuando el primer pedido del amigo queda CONFIRMADO
+// (pago aprobado o confirmación del negocio), no cuando solo se crea. Así un pedido
+// pendiente o cancelado no entrega premios.
 // ─────────────────────────────────────────────────────────────────────────────
 export async function procesarReferidoPrimeraCompra({ cliente_id, empresa_id, pedido_id }) {
   try {
@@ -421,12 +427,12 @@ export async function procesarReferidoPrimeraCompra({ cliente_id, empresa_id, pe
     );
     if (!ref) return;
 
-    // ¿Es su primera compra en esta empresa?
+    // ¿Es su primera compra confirmada en esta empresa? (otras ventas o pedidos ya confirmados la descartan)
     const { rows: [compras] } = await pool.query(
       `SELECT (
          (SELECT COUNT(*) FROM ventas      WHERE cliente_id=$1 AND empresa_id=$2)
        + (SELECT COUNT(*) FROM pedidos_online
-          WHERE cliente_id=$1 AND empresa_id=$2 AND estado != 'cancelado' AND id != $3)
+          WHERE cliente_id=$1 AND empresa_id=$2 AND estado NOT IN ('cancelado','pendiente') AND id != $3)
        ) AS total`,
       [cliente_id, empresa_id, pedido_id]
     );
@@ -453,8 +459,9 @@ export async function procesarReferidoPrimeraCompra({ cliente_id, empresa_id, pe
       ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       : null;
 
-    // Marcar como completado + guardar herencia
-    await pool.query(
+    // Marcar como completado + guardar herencia.
+    // La condición estado='registrado' evita completarlo dos veces si llegan dos avisos a la vez.
+    const { rowCount: completado } = await pool.query(
       `UPDATE referidos SET
          estado                       = 'completado',
          nivel_referidor_al_completar = $1,
@@ -464,7 +471,7 @@ export async function procesarReferidoPrimeraCompra({ cliente_id, empresa_id, pe
          nivel_heredado_id            = $5,
          nivel_heredado_hasta         = $6,
          completado_en                = NOW()
-       WHERE id = $7`,
+       WHERE id = $7 AND estado = 'registrado'`,
       [
         nivel?.nombre || "Sin nivel",
         pedido_id,
@@ -475,6 +482,7 @@ export async function procesarReferidoPrimeraCompra({ cliente_id, empresa_id, pe
         ref.id,
       ]
     );
+    if (completado === 0) return; // otro proceso ya lo completó
 
     // Obtener nombre del nivel heredado para la notificación
     let nivelHeredadoNombre = null;

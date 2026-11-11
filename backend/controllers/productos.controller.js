@@ -398,12 +398,13 @@ export const getNivelCliente = async (req, res) => {
   try {
     const { clienteId, empresaId } = req.params;
 
-    const { totalMes, nivel: nivelActual } = await getNivelLealtadCliente(clienteId, empresaId);
+    const { totalMes, nivel: nivelActual, heredado, heredado_hasta } = await getNivelLealtadCliente(clienteId, empresaId);
 
     res.json({
       total_mes:    totalMes,
       nivel_actual: nivelActual,
       descuento:    nivelActual ? nivelActual.descuento_porcentaje : 0,
+      nivel_heredado: heredado ? { activo: true, hasta: heredado_hasta } : { activo: false },
     });
 
   } catch (error) {

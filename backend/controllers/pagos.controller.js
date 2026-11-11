@@ -3,16 +3,18 @@ import Stripe from "stripe";
 import crypto from "crypto";
 import { getLlavePrivada } from "./integraciones.controller.js";
 import { enviarEmailEstadoPedido } from "../utils/email.js";
+import { procesarReferidoPrimeraCompra } from "./referidos.controller.js";
 
 // ── Función central: procesar pago aprobado (igual para todas las pasarelas) ─
 async function procesarPagoAprobado({ empresa_id, pedido_id, proveedor, referencia, monto, datos_respuesta }) {
   const client = await pool.connect();
   let notificarCliente = false;
+  let clienteDelPedido = null;
   try {
     await client.query("BEGIN");
 
     const { rows: [pedido] } = await client.query(
-      "SELECT total, empresa_id, estado FROM pedidos_online WHERE id = $1 FOR UPDATE", [pedido_id]
+      "SELECT total, empresa_id, estado, cliente_id FROM pedidos_online WHERE id = $1 FOR UPDATE", [pedido_id]
     );
     // Un pago menor al total del pedido (o de otra tienda) no confirma el pedido
     if (!pedido || Number(pedido.empresa_id) !== Number(empresa_id) || Number(monto) + 0.5 < Number(pedido.total)) {
@@ -45,6 +47,7 @@ async function procesarPagoAprobado({ empresa_id, pedido_id, proveedor, referenc
 
     // Solo el primer pago aprobado notifica; un reintento del webhook no repite el correo
     notificarCliente = pedido.estado === "pendiente";
+    clienteDelPedido = pedido.cliente_id;
 
     await client.query("COMMIT");
   } catch (error) {
@@ -53,6 +56,11 @@ async function procesarPagoAprobado({ empresa_id, pedido_id, proveedor, referenc
     throw error;
   } finally {
     client.release();
+  }
+
+  // 🤝 Primera compra del amigo referido: el pago aprobado es lo que la confirma
+  if (notificarCliente && clienteDelPedido) {
+    procesarReferidoPrimeraCompra({ cliente_id: clienteDelPedido, empresa_id, pedido_id: Number(pedido_id) });
   }
 
   // 📧 Email de confirmación al cliente (fuera de transacción — fire-and-forget)

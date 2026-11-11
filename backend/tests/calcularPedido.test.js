@@ -5,10 +5,13 @@ vi.mock("../config/db.js", () => ({ default: { query: vi.fn() } }));
 import { calcularPedido, ErrorPedido } from "../utils/calcularPedido.js";
 
 // Base de datos falsa: responde según el texto de la consulta
-function crearDb({ productos, nivel = null, empresa, referido = null, cupon = null, usosCliente = 0 }) {
+function crearDb({ productos, nivel = null, nivelHeredado = null, comprasPrevias = 0, empresa, referido = null, cupon = null, usosCliente = 0 }) {
   return {
     query: vi.fn(async (sql) => {
+      if (sql.includes("nivel_heredado_id")) return { rows: nivelHeredado ? [nivelHeredado] : [] };
       if (sql.includes("FROM productos")) return { rows: productos };
+      // El conteo de compras previas del cliente (primera compra) usa COUNT(*); la suma del mes usa SUM(total)
+      if (sql.includes("COUNT(*)")) return { rows: [{ total: comprasPrevias }] };
       if (sql.includes("FROM ventas") || sql.includes("FROM pedidos_online")) return { rows: [{ total: 0 }] };
       if (sql.includes("FROM niveles_lealtad")) return { rows: nivel ? [nivel] : [] };
       if (sql.includes("FROM empresas")) return { rows: [empresa] };
@@ -72,6 +75,52 @@ describe("calcularPedido", () => {
     const r = await calcularPedido({ empresa_id: 1, cliente_id: 5, detalle: [{ producto_id: 1, cantidad: 1 }], departamento_id: 11 }, db);
     expect(r.descuento_referido).toBe(1000);
     expect(r.total).toBe(9000);
+  });
+
+  it("el descuento de referido solo vale para la primera compra", async () => {
+    const referido = { descuento_amigo_pct: "10", envio_gratis_amigo: true };
+    const primera = crearDb({ productos: [atun], empresa, referido, comprasPrevias: 0 });
+    const conCompras = crearDb({ productos: [atun], empresa, referido, comprasPrevias: 1 });
+    const pedido = { empresa_id: 1, cliente_id: 5, detalle: [{ producto_id: 1, cantidad: 1 }], departamento_id: 11 };
+
+    const r1 = await calcularPedido(pedido, primera);
+    expect(r1.descuento_referido).toBe(1000);
+    expect(r1.costo_envio).toBe(0);
+
+    // Un pedido previo no cancelado (por ejemplo, otro pedido pendiente) ya consumió el beneficio
+    const r2 = await calcularPedido(pedido, conCompras);
+    expect(r2.descuento_referido).toBe(0);
+    expect(r2.costo_envio).toBe(5000);
+    expect(r2.total).toBe(15000);
+  });
+
+  it("usa el nivel heredado por referido cuando es mejor que el ganado", async () => {
+    const db = crearDb({
+      productos: [atun], empresa,
+      nivel: { monto_minimo: "700000", descuento_porcentaje: "8" },
+      nivelHeredado: { monto_minimo: "1000000", descuento_porcentaje: "10", nivel_heredado_hasta: "2099-01-01" },
+    });
+    const r = await calcularPedido({ empresa_id: 1, cliente_id: 5, detalle: [{ producto_id: 1, cantidad: 1 }], departamento_id: 5 }, db);
+    expect(r.items[0].precio_unitario).toBe(9000); // 10 % de descuento del nivel heredado
+  });
+
+  it("aplica el nivel heredado aunque el cliente no tenga nivel ganado", async () => {
+    const db = crearDb({
+      productos: [atun], empresa,
+      nivelHeredado: { monto_minimo: "700000", descuento_porcentaje: "8", nivel_heredado_hasta: "2099-01-01" },
+    });
+    const r = await calcularPedido({ empresa_id: 1, cliente_id: 5, detalle: [{ producto_id: 1, cantidad: 1 }], departamento_id: 5 }, db);
+    expect(r.items[0].precio_unitario).toBe(9200);
+  });
+
+  it("conserva el nivel ganado si el heredado es peor", async () => {
+    const db = crearDb({
+      productos: [atun], empresa,
+      nivel: { monto_minimo: "1000000", descuento_porcentaje: "10" },
+      nivelHeredado: { monto_minimo: "700000", descuento_porcentaje: "8", nivel_heredado_hasta: "2099-01-01" },
+    });
+    const r = await calcularPedido({ empresa_id: 1, cliente_id: 5, detalle: [{ producto_id: 1, cantidad: 1 }], departamento_id: 5 }, db);
+    expect(r.items[0].precio_unitario).toBe(9000);
   });
 
   it("valida y aplica el cupón en el servidor", async () => {

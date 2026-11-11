@@ -1,5 +1,6 @@
 import pool from "../config/db.js";
 import { crearNotificacion } from "../utils/notificaciones.js";
+import { getNivelLealtadCliente } from "../utils/calcularPedido.js";
 import { OAuth2Client } from "google-auth-library";
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -118,6 +119,12 @@ export const getVista360 = async (req, res) => {
       [empresa_id, totalMes]
     );
 
+    // Si tiene un nivel heredado por referido vigente y mejor que el ganado, ese es el nivel que se le aplica
+    const efectivo = await getNivelLealtadCliente(cliente_id, empresa_id);
+    const nivelMostrado = efectivo.heredado
+      ? { ...efectivo.nivel, heredado: true, heredado_hasta: efectivo.heredado_hasta }
+      : nivelActual;
+
     // Próximo nivel
     const { rows: [proximoNivel] } = await pool.query(
       `SELECT nombre, monto_minimo FROM niveles_lealtad
@@ -190,7 +197,7 @@ export const getVista360 = async (req, res) => {
       },
       lealtad: {
         total_mes:          totalMes,
-        nivel_actual:       nivelActual || null,
+        nivel_actual:       nivelMostrado || null,
         proximo_nivel:      proximoNivel || null,
         falta_para_subir:   proximoNivel ? proximoNivel.monto_minimo - totalMes : 0,
       },
